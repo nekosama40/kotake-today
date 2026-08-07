@@ -9,22 +9,24 @@ $publicFile = Join-Path $projectRoot 'public\data\events.json'
 $tempFile = Join-Path $projectRoot 'public\data\events.next.json'
 $distFile = Join-Path $projectRoot 'dist\data\events.json'
 $logFile = Join-Path $projectRoot "logs\publish-$TargetDate.log"
-$lockFile = Join-Path $projectRoot 'work\publish.lock'
+$publishMutex = [System.Threading.Mutex]::new($false, 'Local\KotakeEventsPublish')
+$publishMutexAcquired = $false
 
 if (-not (Test-Path -LiteralPath $pendingFile)) {
   throw "No validated pending data exists for $TargetDate. Previous public data was preserved."
 }
 
-if (Test-Path -LiteralPath $lockFile) {
-  $lockAge = (Get-Date) - (Get-Item -LiteralPath $lockFile).LastWriteTime
-  if ($lockAge.TotalMinutes -lt 20) {
-    throw 'Another publication run is active.'
-  }
-  Remove-Item -LiteralPath $lockFile -Force
-}
-Set-Content -LiteralPath $lockFile -Value (Get-Date).ToString('o') -Encoding utf8
-
 try {
+  try {
+    $publishMutexAcquired = $publishMutex.WaitOne(0)
+  }
+  catch [System.Threading.AbandonedMutexException] {
+    $publishMutexAcquired = $true
+  }
+  if (-not $publishMutexAcquired) {
+    throw 'Another publication or online update run is active.'
+  }
+
   & node (Join-Path $PSScriptRoot 'prepare-publish.mjs') $pendingFile $tempFile $TargetDate 2>&1 | Tee-Object -FilePath $logFile -Append
   if ($LASTEXITCODE -ne 0) { throw 'Publication preparation failed. Previous public data was preserved.' }
 
@@ -47,5 +49,8 @@ try {
 }
 finally {
   Remove-Item -LiteralPath $tempFile -Force -ErrorAction SilentlyContinue
-  Remove-Item -LiteralPath $lockFile -Force -ErrorAction SilentlyContinue
+  if ($publishMutexAcquired) {
+    $publishMutex.ReleaseMutex()
+  }
+  $publishMutex.Dispose()
 }
