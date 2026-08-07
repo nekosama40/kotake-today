@@ -144,9 +144,13 @@ $env:PYTHONUTF8 = '1'
 $env:PYTHONIOENCODING = 'utf-8'
 
 "[$((Get-Date).ToString('o'))] Starting $PassName" | Set-Content -LiteralPath $PassLogFile -Encoding utf8
+$savedErrorPreference = $ErrorActionPreference
+$ErrorActionPreference = 'Continue'
 Get-Content -LiteralPath $promptFile -Raw -Encoding utf8 | & codex @codexArgs 2>&1 | Tee-Object -FilePath $PassLogFile -Append
-if ($LASTEXITCODE -ne 0) {
-  throw "Codex research pass $PassName failed with exit code $LASTEXITCODE."
+$codexExitCode = $LASTEXITCODE
+$ErrorActionPreference = $savedErrorPreference
+if ($codexExitCode -ne 0) {
+  throw "Codex research pass $PassName failed with exit code $codexExitCode."
 }
 if (-not (Test-Path -LiteralPath $OutputFile)) {
   throw "Codex did not create $OutputFile."

@@ -287,6 +287,8 @@ describe("research pipeline", () => {
     expect(researchScript).toContain("prepare-research-schema.mjs");
     expect(researchScript).toContain("prepare-social-brief.mjs");
     expect(researchScript).toContain("watchlistChecks");
+    expect(researchScript).toContain("$ErrorActionPreference = 'Continue'");
+    expect(researchScript).toContain("$codexExitCode = $LASTEXITCODE");
     expect(researchScript).toContain("'--output-schema', $passSchemaFile");
     expect(taskScript).toContain("-At '04:30'");
     expect(taskScript).toContain("-At '06:25'");
