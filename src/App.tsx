@@ -1,7 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   availabilityLabel,
+  eventMatchesGenre,
+  formatEventDate,
+  formatPublishedAt,
   formatTimeRange,
+  genreFilters,
   isEventVisible,
   selectRecommendations,
   sortEvents,
@@ -9,6 +13,7 @@ import {
   tokyoDate,
 } from "./lib/events";
 import type { EventItem, EventsPayload, SortKey } from "./types";
+import type { GenreFilterValue } from "./lib/events";
 
 const sortOptions: Array<{ value: SortKey; label: string }> = [
   { value: "recommended", label: "おすすめ順" },
@@ -65,30 +70,36 @@ function EventCard({ event, featured = false }: { event: EventItem; featured?: b
   const now = new Date();
   return (
     <article className={`event-card ${featured ? "featured-card" : ""}`}>
-      <EventVisual event={event} featured={featured} />
-      <div className="event-card-body">
-        <div className="event-meta-row">
+      <a
+        className="event-card-link"
+        href={event.sourceUrl}
+        target="_blank"
+        rel="noreferrer"
+        aria-label={`${event.title}の公式ページを開く`}
+      >
+        <EventVisual event={event} featured={featured} />
+        <div className="event-card-body">
           <span className="timing-pill">{timingLabel(event, now)}</span>
-          <span>{formatTimeRange(event)}</span>
+          <dl className="event-schedule">
+            <div><dt>開催日</dt><dd>{formatEventDate(event)}</dd></div>
+            <div><dt>時間</dt><dd>{formatTimeRange(event)}</dd></div>
+          </dl>
+          <h3>{event.title}</h3>
+          <p className="summary">{event.summary}</p>
+          <div className="location-line">
+            <strong>{event.venueName}</strong>
+            <span>{event.ward}・{event.nearestStation}</span>
+          </div>
+          <div className="facts">
+            <span className="travel">小竹向原から約{event.kotakeMinutes}分</span>
+            <span>{event.priceLabel}</span>
+          </div>
+          <p className="availability">{availabilityLabel(event)}　{event.sameDayNote}</p>
+          <div className="tag-row">
+            {event.tags.slice(0, 4).map((tag) => <span key={tag}>#{tag}</span>)}
+          </div>
         </div>
-        <h3>{event.title}</h3>
-        <p className="summary">{event.summary}</p>
-        <div className="location-line">
-          <strong>{event.venueName}</strong>
-          <span>{event.ward}・{event.nearestStation}</span>
-        </div>
-        <div className="facts">
-          <span className="travel">小竹向原から約{event.kotakeMinutes}分</span>
-          <span>{event.priceLabel}</span>
-        </div>
-        <p className="availability">{availabilityLabel(event)}　{event.sameDayNote}</p>
-        <div className="tag-row">
-          {event.tags.slice(0, 4).map((tag) => <span key={tag}>#{tag}</span>)}
-        </div>
-        <a className="source-link" href={event.sourceUrl} target="_blank" rel="noreferrer">
-          {event.sourceLabel}で詳細を見る <span aria-hidden="true">↗</span>
-        </a>
-      </div>
+      </a>
     </article>
   );
 }
@@ -98,7 +109,7 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>("recommended");
   const [search, setSearch] = useState("");
-  const [selectedTag, setSelectedTag] = useState("すべて");
+  const [selectedGenre, setSelectedGenre] = useState<GenreFilterValue>("all");
   const [freeOnly, setFreeOnly] = useState(false);
   const [walkInOnly, setWalkInOnly] = useState(false);
   const [clock, setClock] = useState(new Date());
@@ -124,15 +135,20 @@ function App() {
     return payload.events.filter((event) => isEventVisible(event, clock));
   }, [payload, dataIsToday, clock]);
 
-  const tags = useMemo(() => {
-    const allTags = new Set(activeEvents.flatMap((event) => event.tags));
-    return ["すべて", ...Array.from(allTags).sort((a, b) => a.localeCompare(b, "ja"))];
+  const availableGenres = useMemo(() => {
+    return genreFilters.filter((genre) => activeEvents.some((event) => eventMatchesGenre(event, genre.value)));
   }, [activeEvents]);
+
+  useEffect(() => {
+    if (selectedGenre !== "all" && !availableGenres.some((genre) => genre.value === selectedGenre)) {
+      setSelectedGenre("all");
+    }
+  }, [availableGenres, selectedGenre]);
 
   const filteredEvents = useMemo(() => {
     const needle = search.trim().toLocaleLowerCase("ja");
     const filtered = activeEvents.filter((event) => {
-      if (selectedTag !== "すべて" && !event.tags.includes(selectedTag)) return false;
+      if (!eventMatchesGenre(event, selectedGenre)) return false;
       if (freeOnly && !event.isFree) return false;
       if (walkInOnly && event.reservation !== "not_required") return false;
       if (!needle) return true;
@@ -142,11 +158,12 @@ function App() {
         .includes(needle);
     });
     return sortEvents(filtered, sortKey);
-  }, [activeEvents, search, selectedTag, freeOnly, walkInOnly, sortKey]);
+  }, [activeEvents, search, selectedGenre, freeOnly, walkInOnly, sortKey]);
 
   const recommendations = useMemo(() => selectRecommendations(activeEvents), [activeEvents]);
   const formattedDate = new Intl.DateTimeFormat("ja-JP", {
     timeZone: "Asia/Tokyo",
+    year: "numeric",
     month: "long",
     day: "numeric",
     weekday: "long",
@@ -162,22 +179,21 @@ function App() {
           <span className="brand-dot" />
           こたけから、きょう。
         </a>
-        <div className="header-note">毎朝7:00更新</div>
+        <div className="header-note">毎朝7:00までに更新</div>
       </header>
 
       <main id="top">
         <section className="hero">
           <div>
             <p className="eyebrow">{formattedDate}　東京23区</p>
-            <h1>今日、ふらっと。<br /><em>思いがけない場所へ。</em></h1>
+            <h1>今日、ふらっと<em>東京へ。</em></h1>
             <p className="hero-copy">
               予約なしや当日参加を中心に、Lunaが朝から幅広く調査。小竹向原から約1時間以内の、今日だけの選択肢です。
             </p>
           </div>
           <div className="update-stamp">
-            <span>{activeEvents.length}</span>
-            <small>件を掲載中</small>
-            <time>{new Intl.DateTimeFormat("ja-JP", { timeZone: "Asia/Tokyo", hour: "2-digit", minute: "2-digit" }).format(new Date(payload.publishedAt))} 更新</time>
+            <div className="live-count"><strong>{activeEvents.length}</strong><span>件を掲載中</span></div>
+            <time dateTime={payload.publishedAt}><small>最終更新</small><strong>{formatPublishedAt(payload.publishedAt)}</strong></time>
           </div>
         </section>
 
@@ -221,8 +237,9 @@ function App() {
           </div>
 
           <div className="tag-filter" role="list" aria-label="ジャンルで絞り込む">
-            {tags.map((tag) => (
-              <button key={tag} className={selectedTag === tag ? "active" : ""} onClick={() => setSelectedTag(tag)}>{tag}</button>
+            <button className={selectedGenre === "all" ? "active" : ""} onClick={() => setSelectedGenre("all")}>すべて</button>
+            {availableGenres.map((genre) => (
+              <button key={genre.value} className={selectedGenre === genre.value ? "active" : ""} onClick={() => setSelectedGenre(genre.value)}>{genre.label}</button>
             ))}
           </div>
 
@@ -235,18 +252,6 @@ function App() {
           )}
         </section>
 
-        <section className="method section-shell">
-          <span className="section-number">03</span>
-          <div>
-            <h2>どうやって選んでいる？</h2>
-            <p>公式・主要情報源と、小規模・ローカル情報源をLuna maxで同時に深掘り。受付終了・満席・中止が確認できたものは掲載しません。</p>
-          </div>
-          <dl>
-            <div><dt>{payload.searchPasses}</dt><dd>系統の独立調査</dd></div>
-            <div><dt>{payload.sourceCount}</dt><dd>情報源を確認</dd></div>
-            <div><dt>60</dt><dd>分以内が目安</dd></div>
-          </dl>
-        </section>
       </main>
 
       <footer>

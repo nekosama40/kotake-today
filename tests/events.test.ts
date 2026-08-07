@@ -1,5 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { formatTimeRange, isEventVisible, selectRecommendations, sortEvents, timingLabel, tokyoDate } from "../src/lib/events";
+import {
+  eventMatchesGenre,
+  formatEventDate,
+  formatPublishedAt,
+  formatTimeRange,
+  isEventVisible,
+  selectRecommendations,
+  sortEvents,
+  timingLabel,
+  tokyoDate,
+} from "../src/lib/events";
 import type { EventItem } from "../src/types";
 
 const base: EventItem = {
@@ -52,6 +62,18 @@ describe("event helpers", () => {
     const allDay = { ...base, startAt: "2026-08-07", endAt: "2026-08-11" };
     expect(timingLabel(allDay, new Date("2026-08-06T22:00:00Z"))).toBe("開催中");
     expect(formatTimeRange(allDay)).toBe("終日・開催時間は公式で確認");
+  });
+
+  it("shows explicit Tokyo dates and publication times", () => {
+    expect(formatEventDate(base)).toBe("8月7日（金）");
+    expect(formatPublishedAt("2026-08-06T21:45:00Z")).toBe("2026年8月7日（金） 06:45");
+  });
+
+  it("groups detailed tags into broad filter genres", () => {
+    expect(eventMatchesGenre({ ...base, tags: ["現代美術", "夜間開館"] }, "art")).toBe(true);
+    expect(eventMatchesGenre({ ...base, tags: ["ボードゲーム"] }, "game-tech")).toBe(true);
+    expect(eventMatchesGenre({ ...base, tags: ["絵本", "おはなし会"] }, "family")).toBe(true);
+    expect(eventMatchesGenre(base, "music")).toBe(false);
   });
 
   it("sorts by travel time", () => {

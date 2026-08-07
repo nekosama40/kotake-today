@@ -11,6 +11,34 @@ const primaryTags = [
   "テクノロジー",
 ];
 
+export const genreFilters = [
+  { value: "art", label: "展示・アート", keywords: ["展示", "アート", "写真", "美術", "浮世絵", "イラスト", "アニメ", "マンガ", "ファッション", "ポップアップ", "プロジェクション"] },
+  { value: "music", label: "音楽・ライブ", keywords: ["音楽", "ライブ", "コンサート", "ピアノ", "DJ", "演奏"] },
+  { value: "game-tech", label: "ゲーム・IT", keywords: ["ゲーム", "eスポーツ", "esports", "IT", "AI", "テクノロジー", "科学", "鉄道"] },
+  { value: "experience", label: "体験・学び", keywords: ["体験", "ワークショップ", "工作", "自由研究", "スタンプラリー", "散策", "歴史", "環境", "庭園", "銭湯"] },
+  { value: "local", label: "地域・交流", keywords: ["地域", "祭", "盆踊り", "七夕", "商店街", "交流", "国際", "対話", "コミュニ", "居場所", "平和", "図書館"] },
+  { value: "food", label: "フード・買い物", keywords: ["フード", "食", "酒", "ビール", "マルシェ", "グルメ", "物産", "買い物", "ポップアップ"] },
+  { value: "family", label: "子ども・家族", keywords: ["子ども", "こども", "親子", "絵本", "おはなし", "昆虫", "動物", "自由研究", "工作"] },
+] as const;
+
+export type GenreFilterValue = "all" | (typeof genreFilters)[number]["value"];
+
+function tokyoDateParts(value: Date): Record<string, string> {
+  return Object.fromEntries(new Intl.DateTimeFormat("ja-JP", {
+    timeZone: "Asia/Tokyo",
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+    weekday: "short",
+  }).formatToParts(value).map((part) => [part.type, part.value]));
+}
+
+function eventStartDate(event: EventItem): Date {
+  return /^\d{4}-\d{2}-\d{2}$/.test(event.startAt)
+    ? new Date(`${event.startAt}T00:00:00+09:00`)
+    : new Date(event.startAt);
+}
+
 export function tokyoDate(date = new Date()): string {
   return new Intl.DateTimeFormat("sv-SE", {
     timeZone: "Asia/Tokyo",
@@ -18,6 +46,33 @@ export function tokyoDate(date = new Date()): string {
     month: "2-digit",
     day: "2-digit",
   }).format(date);
+}
+
+export function formatEventDate(event: EventItem): string {
+  const parts = tokyoDateParts(eventStartDate(event));
+  return `${parts.month}月${parts.day}日（${parts.weekday}）`;
+}
+
+export function formatPublishedAt(value: string): string {
+  const date = new Date(value);
+  const parts = tokyoDateParts(date);
+  const time = new Intl.DateTimeFormat("ja-JP", {
+    timeZone: "Asia/Tokyo",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(date);
+  return `${parts.year}年${parts.month}月${parts.day}日（${parts.weekday}） ${time}`;
+}
+
+export function eventMatchesGenre(event: EventItem, genre: GenreFilterValue): boolean {
+  if (genre === "all") return true;
+  const filter = genreFilters.find((item) => item.value === genre);
+  if (!filter) return false;
+  return event.tags.some((tag) => {
+    const normalizedTag = tag.toLocaleLowerCase("ja");
+    return filter.keywords.some((keyword) => normalizedTag.includes(keyword.toLocaleLowerCase("ja")));
+  });
 }
 
 export function isEventVisible(event: EventItem, now = new Date()): boolean {
