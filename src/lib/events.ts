@@ -76,9 +76,12 @@ export function eventMatchesGenre(event: EventItem, genre: GenreFilterValue): bo
   });
 }
 
+export function isEventToday(event: EventItem, now = new Date()): boolean {
+  return event.startAt.slice(0, 10) === tokyoDate(now);
+}
+
 export function isEventVisible(event: EventItem, now = new Date()): boolean {
-  const today = tokyoDate(now);
-  if (event.startAt.slice(0, 10) !== today) return false;
+  if (!isEventToday(event, now)) return false;
   const estimatedArrival = now.getTime() + event.kotakeMinutes * 60_000;
   return event.endAt === null || new Date(event.endAt).getTime() > estimatedArrival;
 }
@@ -139,6 +142,7 @@ export function timingLabel(event: EventItem, now = new Date()): string {
     : new Date(event.startAt).getTime();
   const end = event.endAt === null ? Number.POSITIVE_INFINITY : new Date(event.endAt).getTime();
   const current = now.getTime();
+  if (current >= end) return "終了";
   if (current >= start && current < end) return "開催中";
   const minutes = Math.max(0, Math.round((start - current) / 60_000));
   if (minutes < 60) return `あと約${minutes}分`;

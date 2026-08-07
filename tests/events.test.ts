@@ -4,6 +4,7 @@ import {
   formatEventDate,
   formatPublishedAt,
   formatTimeRange,
+  isEventToday,
   isEventVisible,
   selectRecommendations,
   sortEvents,
@@ -45,6 +46,8 @@ describe("event helpers", () => {
   it("hides ended events", () => {
     expect(isEventVisible(base, new Date("2026-08-07T09:00:00Z"))).toBe(true);
     expect(isEventVisible(base, new Date("2026-08-07T12:00:00Z"))).toBe(false);
+    expect(isEventToday(base, new Date("2026-08-07T12:00:00Z"))).toBe(true);
+    expect(timingLabel(base, new Date("2026-08-07T12:00:00Z"))).toBe("終了");
   });
 
   it("hides events that would end before arrival from Kotake-mukaihara", () => {

@@ -6,6 +6,7 @@ import {
   formatPublishedAt,
   formatTimeRange,
   genreFilters,
+  isEventToday,
   isEventVisible,
   sortEvents,
   timingLabel,
@@ -69,6 +70,7 @@ function EventVisual({ event, featured = false }: { event: EventItem; featured?:
 
 function EventCard({ event, featured = false }: { event: EventItem; featured?: boolean }) {
   const now = new Date();
+  const timing = timingLabel(event, now);
   return (
     <article className={`event-card ${featured ? "featured-card" : ""}`}>
       <a
@@ -80,7 +82,7 @@ function EventCard({ event, featured = false }: { event: EventItem; featured?: b
       >
         <EventVisual event={event} featured={featured} />
         <div className="event-card-body">
-          <span className="timing-pill">{timingLabel(event, now)}</span>
+          <span className={`timing-pill ${timing === "終了" ? "ended" : ""}`}>{timing}</span>
           <dl className="event-schedule">
             <div><dt>開催日</dt><dd>{formatEventDate(event)}</dd></div>
             <div><dt>時間</dt><dd>{formatTimeRange(event)}</dd></div>
@@ -113,6 +115,7 @@ function App() {
   const [selectedGenre, setSelectedGenre] = useState<GenreFilterValue>("all");
   const [freeOnly, setFreeOnly] = useState(false);
   const [walkInOnly, setWalkInOnly] = useState(false);
+  const [showEnded, setShowEnded] = useState(false);
   const [clock, setClock] = useState(new Date());
 
   useEffect(() => {
@@ -131,14 +134,19 @@ function App() {
   }, []);
 
   const dataIsToday = payload?.generatedFor === tokyoDate(clock);
-  const activeEvents = useMemo(() => {
+  const todayEvents = useMemo(() => {
     if (!payload || !dataIsToday) return [];
-    return payload.events.filter((event) => isEventVisible(event, clock));
+    return payload.events.filter((event) => isEventToday(event, clock));
   }, [payload, dataIsToday, clock]);
 
+  const visibleEvents = useMemo(() => {
+    if (showEnded) return todayEvents;
+    return todayEvents.filter((event) => isEventVisible(event, clock));
+  }, [todayEvents, showEnded, clock]);
+
   const availableGenres = useMemo(() => {
-    return genreFilters.filter((genre) => activeEvents.some((event) => eventMatchesGenre(event, genre.value)));
-  }, [activeEvents]);
+    return genreFilters.filter((genre) => visibleEvents.some((event) => eventMatchesGenre(event, genre.value)));
+  }, [visibleEvents]);
 
   useEffect(() => {
     if (selectedGenre !== "all" && !availableGenres.some((genre) => genre.value === selectedGenre)) {
@@ -148,7 +156,7 @@ function App() {
 
   const filteredEvents = useMemo(() => {
     const needle = search.trim().toLocaleLowerCase("ja");
-    const filtered = activeEvents.filter((event) => {
+    const filtered = visibleEvents.filter((event) => {
       if (!eventMatchesGenre(event, selectedGenre)) return false;
       if (freeOnly && !event.isFree) return false;
       if (walkInOnly && event.reservation !== "not_required") return false;
@@ -159,7 +167,7 @@ function App() {
         .includes(needle);
     });
     return sortEvents(filtered, sortKey);
-  }, [activeEvents, search, selectedGenre, freeOnly, walkInOnly, sortKey]);
+  }, [visibleEvents, search, selectedGenre, freeOnly, walkInOnly, sortKey]);
 
   const formattedDate = new Intl.DateTimeFormat("ja-JP", {
     timeZone: "Asia/Tokyo",
@@ -201,8 +209,8 @@ function App() {
 
         <section className="all-events section-shell">
           <div className="section-heading">
-            <div><span className="section-number">01</span><h2>これから行けるイベント</h2></div>
-            <p>終了したイベントは現在時刻に合わせて自動的に消えます。</p>
+            <div><span className="section-number">01</span><h2>{showEnded ? "今日のイベント" : "これから行けるイベント"}</h2></div>
+            <p>終了分は「終了も表示」で確認できます。</p>
           </div>
 
           <div className="controls">
@@ -218,6 +226,7 @@ function App() {
             </label>
             <label className="toggle"><input type="checkbox" checked={freeOnly} onChange={(event) => setFreeOnly(event.target.checked)} /><span>無料のみ</span></label>
             <label className="toggle"><input type="checkbox" checked={walkInOnly} onChange={(event) => setWalkInOnly(event.target.checked)} /><span>予約不要</span></label>
+            <label className="toggle"><input type="checkbox" checked={showEnded} onChange={(event) => setShowEnded(event.target.checked)} /><span>終了も表示</span></label>
           </div>
 
           <div className="tag-filter" role="list" aria-label="ジャンルで絞り込む">
@@ -232,7 +241,7 @@ function App() {
               {filteredEvents.map((event) => <EventCard key={event.id} event={event} />)}
             </div>
           ) : (
-            <div className="empty-state"><span>○</span><p>この条件で、これから参加できるイベントは見つかりませんでした。</p></div>
+            <div className="empty-state"><span>○</span><p>この条件に合う今日のイベントは見つかりませんでした。</p></div>
           )}
         </section>
 
