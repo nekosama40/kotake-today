@@ -1,0 +1,341 @@
+{
+  "updatedAt": "2026-08-08",
+  "accounts": [
+    {
+      "id": "event-checker-x",
+      "name": "イベントチェッカー製作委員会",
+      "platform": "X",
+      "handle": "@event_checker",
+      "url": "https://x.com/event_checker",
+      "cadence": "core",
+      "rank": 1,
+      "genres": ["総合", "フード", "祭り", "期間限定"],
+      "note": "東京周辺の当日・週末イベントを高頻度でまとめる"
+    },
+    {
+      "id": "enjoy-tokyo-x",
+      "name": "レッツエンジョイ東京",
+      "platform": "X",
+      "handle": "@enjoy_tokyo",
+      "url": "https://x.com/enjoy_tokyo",
+      "cadence": "core",
+      "rank": 2,
+      "genres": ["総合", "地域", "展示", "フード"],
+      "note": "東京のおでかけ情報を横断して発信する"
+    },
+    {
+      "id": "lets-enjoy-tokyo-instagram",
+      "name": "レッツエンジョイ東京",
+      "platform": "Instagram",
+      "handle": "@lets_enjoytokyo",
+      "url": "https://www.instagram.com/lets_enjoytokyo/",
+      "cadence": "core",
+      "rank": 3,
+      "genres": ["総合", "地域", "フード", "季節"],
+      "note": "画像中心の新着・期間限定情報を拾う"
+    },
+    {
+      "id": "timeout-tokyo-jp-x",
+      "name": "タイムアウト東京",
+      "platform": "X",
+      "handle": "@TimeOutTokyoJP",
+      "url": "https://x.com/TimeOutTokyoJP",
+      "cadence": "core",
+      "rank": 4,
+      "genres": ["総合", "変わった企画", "音楽", "ナイト"],
+      "note": "独自性のある東京イベントと新規スポットに強い"
+    },
+    {
+      "id": "timeout-tokyo-jp-instagram",
+      "name": "タイムアウト東京",
+      "platform": "Instagram",
+      "handle": "@timeouttokyo_jp",
+      "url": "https://www.instagram.com/timeouttokyo_jp/",
+      "cadence": "core",
+      "rank": 5,
+      "genres": ["総合", "変わった企画", "展示", "フード"],
+      "note": "写真・リール経由で開催中イベントを発見する"
+    },
+    {
+      "id": "fashion-press-x",
+      "name": "Fashion Press",
+      "platform": "X",
+      "handle": "@fashionpressnet",
+      "url": "https://x.com/fashionpressnet",
+      "cadence": "core",
+      "rank": 6,
+      "genres": ["ポップアップ", "フード", "アート", "映画"],
+      "note": "期間限定店・コラボ・展覧会の新着が多い"
+    },
+    {
+      "id": "fashion-press-instagram",
+      "name": "Fashion Press",
+      "platform": "Instagram",
+      "handle": "@fashionpressjp",
+      "url": "https://www.instagram.com/fashionpressjp/",
+      "cadence": "core",
+      "rank": 7,
+      "genres": ["ポップアップ", "フード", "アート", "キャラクター"],
+      "note": "ビジュアル告知から限定企画を拾う"
+    },
+    {
+      "id": "tokyo-art-beat-x",
+      "name": "Tokyo Art Beat",
+      "platform": "X",
+      "handle": "@TokyoArtBeat_JP",
+      "url": "https://x.com/TokyoArtBeat_JP",
+      "cadence": "core",
+      "rank": 8,
+      "genres": ["展示", "個展", "アート", "トーク"],
+      "note": "大型展から小規模ギャラリーまで扱う"
+    },
+    {
+      "id": "tokyo-art-beat-instagram",
+      "name": "Tokyo Art Beat",
+      "platform": "Instagram",
+      "handle": "@tokyoartbeat",
+      "url": "https://www.instagram.com/tokyoartbeat/",
+      "cadence": "core",
+      "rank": 9,
+      "genres": ["展示", "個展", "アート", "ギャラリー"],
+      "note": "小規模展示の会期・会場発見に使う"
+    },
+    {
+      "id": "collabo-cafe-x",
+      "name": "コラボカフェ",
+      "platform": "X",
+      "handle": "@collabo_cafe",
+      "url": "https://x.com/collabo_cafe",
+      "cadence": "core",
+      "rank": 10,
+      "genres": ["アニメ", "キャラクター", "ゲーム", "コラボカフェ"],
+      "note": "原画展・ポップアップ・コラボカフェを毎日発信する"
+    },
+    {
+      "id": "walkerplus-x",
+      "name": "ウォーカープラス",
+      "platform": "X",
+      "handle": "@walkerplus_news",
+      "url": "https://x.com/walkerplus_news",
+      "cadence": "core",
+      "rank": 11,
+      "genres": ["総合", "季節", "フード", "キャラクター"],
+      "note": "日付別のおでかけ・季節イベントを広く扱う"
+    },
+    {
+      "id": "omatsuri-japan-x",
+      "name": "オマツリジャパン",
+      "platform": "X",
+      "handle": "@omatsurijapan",
+      "url": "https://x.com/omatsurijapan",
+      "cadence": "core",
+      "rank": 12,
+      "genres": ["祭り", "地域", "伝統芸能", "商店街"],
+      "note": "地域祭りや小規模な伝統行事の発見に使う"
+    },
+    {
+      "id": "art-exhibition-nav-x",
+      "name": "美術展ナビ",
+      "platform": "X",
+      "handle": "@art_ex_japan",
+      "url": "https://x.com/art_ex_japan",
+      "cadence": "rotation-a",
+      "rank": 20,
+      "genres": ["展示", "美術館", "博物館"],
+      "note": "公立・私立館の展覧会を横断する"
+    },
+    {
+      "id": "chara-walker-x",
+      "name": "キャラWalker",
+      "platform": "X",
+      "handle": "@chara_walker_",
+      "url": "https://x.com/chara_walker_",
+      "cadence": "rotation-a",
+      "rank": 21,
+      "genres": ["アニメ", "キャラクター", "ゲーム", "ポップアップ"],
+      "note": "キャラクター系の限定企画を補完する"
+    },
+    {
+      "id": "tokyo-cheapo-x",
+      "name": "Tokyo Cheapo",
+      "platform": "X",
+      "handle": "@TokyoCheapo",
+      "url": "https://x.com/TokyoCheapo",
+      "cadence": "rotation-a",
+      "rank": 22,
+      "genres": ["総合", "無料", "祭り", "変わった企画"],
+      "note": "英語圏向け情報から日本語検索で漏れる企画を拾う"
+    },
+    {
+      "id": "tokyo-weekender-x",
+      "name": "Tokyo Weekender",
+      "platform": "X",
+      "handle": "@Tokyo_Weekender",
+      "url": "https://x.com/Tokyo_Weekender",
+      "cadence": "rotation-a",
+      "rank": 23,
+      "genres": ["総合", "音楽", "展示", "国際交流"],
+      "note": "英語圏向けの東京イベントまとめを確認する"
+    },
+    {
+      "id": "metropolis-japan-instagram",
+      "name": "Metropolis Japan",
+      "platform": "Instagram",
+      "handle": "@metropolisjapan",
+      "url": "https://www.instagram.com/metropolisjapan/",
+      "cadence": "rotation-a",
+      "rank": 24,
+      "genres": ["総合", "音楽", "ナイト", "国際交流"],
+      "note": "小規模ライブや交流イベントの補完に使う"
+    },
+    {
+      "id": "tokyo-tokyo-brand-x",
+      "name": "Tokyo Tokyo",
+      "platform": "X",
+      "handle": "@TokyoTokyoBrand",
+      "url": "https://x.com/TokyoTokyoBrand",
+      "cadence": "rotation-b",
+      "rank": 20,
+      "genres": ["観光", "文化", "地域", "公式"],
+      "note": "東京観光財団の公式発信を確認する"
+    },
+    {
+      "id": "tokyo-tokyo-brand-instagram",
+      "name": "Tokyo Tokyo",
+      "platform": "Instagram",
+      "handle": "@tokyotokyooldmeetsnew",
+      "url": "https://www.instagram.com/tokyotokyooldmeetsnew/",
+      "cadence": "rotation-b",
+      "rank": 21,
+      "genres": ["観光", "文化", "地域", "公式"],
+      "note": "画像中心の東京都公式観光情報を確認する"
+    },
+    {
+      "id": "tokyo-gourmet-instagram",
+      "name": "東京グルメ",
+      "platform": "Instagram",
+      "handle": "@tokyogourmet3",
+      "url": "https://www.instagram.com/tokyogourmet3/",
+      "cadence": "rotation-b",
+      "rank": 22,
+      "genres": ["フード", "期間限定", "店舗"],
+      "note": "期間限定メニュー・店舗企画の手がかりに使う"
+    },
+    {
+      "id": "gransta-instagram",
+      "name": "グランスタ東京",
+      "platform": "Instagram",
+      "handle": "@gransta_jp",
+      "url": "https://www.instagram.com/gransta_jp/",
+      "cadence": "rotation-b",
+      "rank": 23,
+      "genres": ["フード", "ポップアップ", "物産", "東京駅"],
+      "note": "駅ナカ催事と期間限定フードをまとめて確認する"
+    },
+    {
+      "id": "tokyo-metro-x",
+      "name": "東京メトロ",
+      "platform": "X",
+      "handle": "@tokyometro_info",
+      "url": "https://x.com/tokyometro_info",
+      "cadence": "rotation-b",
+      "rank": 24,
+      "genres": ["地域", "キャンペーン", "スタンプラリー", "公式"],
+      "note": "沿線イベントやスタンプラリーを拾う"
+    },
+    {
+      "id": "shibuya-tsutaya-x",
+      "name": "SHIBUYA TSUTAYA",
+      "platform": "X",
+      "handle": "@SHIBUYATSUTAYA",
+      "url": "https://x.com/SHIBUYATSUTAYA",
+      "cadence": "rotation-b",
+      "rank": 25,
+      "genres": ["アニメ", "音楽", "ポップアップ", "コラボカフェ"],
+      "note": "複数フロアの期間限定イベントをまとめて発信する"
+    },
+    {
+      "id": "tokyo-anime-center-x",
+      "name": "東京アニメセンター",
+      "platform": "X",
+      "handle": "@anime_tokyo",
+      "url": "https://x.com/anime_tokyo",
+      "cadence": "rotation-b",
+      "rank": 26,
+      "genres": ["アニメ", "キャラクター", "展示", "ポップアップ"],
+      "note": "渋谷のアニメ展示・物販・当日整理券情報を確認する"
+    }
+  ],
+  "directories": [
+    {
+      "name": "イベントチェッカー",
+      "url": "https://www.event-checker.info/",
+      "genres": ["総合", "フード", "祭り"]
+    },
+    {
+      "name": "レッツエンジョイ東京 イベント一覧",
+      "url": "https://www.enjoytokyo.jp/event/list/",
+      "genres": ["総合", "地域", "季節"]
+    },
+    {
+      "name": "My TOKYO イベント情報",
+      "url": "https://www.my.metro.tokyo.lg.jp/event/",
+      "genres": ["自治体", "公園", "施設"]
+    },
+    {
+      "name": "GO TOKYO カレンダー",
+      "url": "https://www.gotokyo.org/jp/calendar/index.html",
+      "genres": ["観光", "祭り", "文化"]
+    },
+    {
+      "name": "ウォーカープラス 東京都イベント",
+      "url": "https://www.walkerplus.com/event_list/ar0313/",
+      "genres": ["総合", "季節", "フード"]
+    },
+    {
+      "name": "Tokyo Art Beat イベント",
+      "url": "https://www.tokyoartbeat.com/events",
+      "genres": ["展示", "個展", "アート"]
+    },
+    {
+      "name": "Anime Yokocho 東京イベント",
+      "url": "https://www.animeyokocho.com/events?area=tokyo",
+      "genres": ["アニメ", "キャラクター", "コラボ"]
+    },
+    {
+      "name": "Metropolis Events",
+      "url": "https://metropolisjapan.com/events/",
+      "genres": ["国際交流", "音楽", "小規模"]
+    },
+    {
+      "name": "Peatix 東京検索",
+      "url": "https://peatix.com/search?country=JP&l.text=%E6%9D%B1%E4%BA%AC",
+      "genres": ["コミュニティ", "トーク", "ワークショップ"]
+    },
+    {
+      "name": "connpass 東京都イベント",
+      "url": "https://connpass.com/event/?prefectures=13",
+      "genres": ["IT", "AI", "ゲーム"]
+    },
+    {
+      "name": "Doorkeeper イベント",
+      "url": "https://www.doorkeeper.jp/events",
+      "genres": ["IT", "交流会", "コミュニティ"]
+    },
+    {
+      "name": "TwiPla イベント",
+      "url": "https://twipla.jp/events",
+      "genres": ["個人主催", "交流会", "ゲーム"]
+    },
+    {
+      "name": "Meetup 東京イベント",
+      "url": "https://www.meetup.com/find/?location=jp--Tokyo&source=EVENTS",
+      "genres": ["交流会", "国際交流", "IT"]
+    },
+    {
+      "name": "JapanDev 週間Techイベント",
+      "url": "https://www.reddit.com/r/JapanDev/new/",
+      "genres": ["IT", "AI", "スタートアップ"]
+    }
+  ]
+}

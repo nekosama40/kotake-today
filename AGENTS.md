@@ -6,5 +6,7 @@
 - Include only events inside Tokyo's 23 special wards, taking place on the requested date, and reachable from Kotake-mukaihara in about 60 minutes or less.
 - Exclude known sold-out, closed, cancelled, postponed, registration-closed, and already-ended events.
 - Prefer official organizer pages. Aggregators and public social posts are discovery sources and must link to the most authoritative available page.
+- Use `config/research-sources.json` as the marked social watchlist. Check only the accounts selected for the current pass, and do not treat an account profile as an event without a dated public post or linked announcement.
+- If X or Instagram requires login, use public search-engine results for the same handle or move to the linked organizer site. Never bypass access controls.
 - Use official-event preview images only when a public image URL is available. Always keep image attribution and source URL. Otherwise return `null` and let the site use its built-in fallback.
 - Do not fabricate availability, prices, times, images, or URLs. Use `unknown` only where the schema permits it.

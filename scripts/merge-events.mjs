@@ -31,6 +31,14 @@ function addIsoDays(value, days) {
 
 const todayPasses = new Set(["official-and-major", "local-and-long-tail", "anime-character-and-food"]);
 const advancePasses = new Set(["next-days-official-and-major", "next-days-local-and-special"]);
+const socialPasses = new Set(["local-and-long-tail", "next-days-local-and-special"]);
+const passRules = new Map([
+  ["official-and-major", { searchMin: 16, searchMax: 24 }],
+  ["local-and-long-tail", { searchMin: 20, searchMax: 28 }],
+  ["anime-character-and-food", { searchMin: 16, searchMax: 24 }],
+  ["next-days-official-and-major", { searchMin: 12, searchMax: 18 }],
+  ["next-days-local-and-special", { searchMin: 16, searchMax: 24 }],
+]);
 const expectedTodayDates = [targetDate];
 const expectedAdvanceDates = [addIsoDays(targetDate, 1), addIsoDays(targetDate, 2)];
 const expectedFivePasses = new Set([...todayPasses, ...advancePasses]);
@@ -58,8 +66,10 @@ for (const researchPass of researchPasses) {
   }
   researchPass.targetDates = targetDates;
 
-  const searchMin = isAdvancePass ? 12 : 16;
-  const searchMax = isAdvancePass ? 18 : 24;
+  const legacyTwoPassRun = researchPasses.length === 2;
+  const configuredRule = passRules.get(researchPass.passName);
+  const searchMin = legacyTwoPassRun ? (isAdvancePass ? 12 : 16) : configuredRule.searchMin;
+  const searchMax = legacyTwoPassRun ? (isAdvancePass ? 18 : 24) : configuredRule.searchMax;
   if (!Number.isInteger(researchPass.searchActions) || researchPass.searchActions < searchMin || researchPass.searchActions > searchMax) {
     throw new Error(`Research pass ${researchPass.passName} must report ${searchMin} to ${searchMax} search actions.`);
   }
@@ -72,6 +82,25 @@ for (const researchPass of researchPasses) {
     }
     if (animeCharacter + food !== researchPass.searchActions) {
       throw new Error("Anime/character and food search breakdown must equal searchActions.");
+    }
+  } else if (socialPasses.has(researchPass.passName)
+    && !(legacyTwoPassRun && researchPass.searchBreakdown === undefined)) {
+    const breakdown = researchPass.searchBreakdown;
+    const todaySocial = researchPass.passName === "local-and-long-tail";
+    const fields = [
+      ["watchlistChecks", todaySocial ? 6 : 4, todaySocial ? 10 : 8],
+      ["xDiscovery", todaySocial ? 4 : 3, todaySocial ? 7 : 6],
+      ["instagramDiscovery", todaySocial ? 4 : 3, todaySocial ? 7 : 6],
+      ["openWebVerification", 6, 10],
+    ];
+    for (const [field, minimum, maximum] of fields) {
+      if (!Number.isInteger(breakdown?.[field]) || breakdown[field] < minimum || breakdown[field] > maximum) {
+        throw new Error(`Social research ${researchPass.passName} has an invalid ${field} count.`);
+      }
+    }
+    const breakdownTotal = fields.reduce((total, [field]) => total + breakdown[field], 0);
+    if (breakdownTotal !== researchPass.searchActions) {
+      throw new Error(`Social research ${researchPass.passName} breakdown must equal searchActions.`);
     }
   } else if (researchPass.searchBreakdown !== null
     && !(researchPasses.length === 2 && researchPass.searchBreakdown === undefined)) {

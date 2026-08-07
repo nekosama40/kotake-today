@@ -8,7 +8,9 @@ import { describe, expect, it } from "vitest";
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const mergeScript = path.join(projectRoot, "scripts", "merge-events.mjs");
 const prepareSchemaScript = path.join(projectRoot, "scripts", "prepare-research-schema.mjs");
+const prepareSocialBriefScript = path.join(projectRoot, "scripts", "prepare-social-brief.mjs");
 const schemaTemplate = path.join(projectRoot, "schemas", "research-output.schema.json");
+const researchSourcesConfig = path.join(projectRoot, "config", "research-sources.json");
 const targetDate = "2099-01-01";
 
 type PassName =
@@ -17,6 +19,11 @@ type PassName =
   | "anime-character-and-food"
   | "next-days-official-and-major"
   | "next-days-local-and-special";
+
+type SearchBreakdown =
+  | { animeCharacter: number; food: number }
+  | { watchlistChecks: number; xDiscovery: number; instagramDiscovery: number; openWebVerification: number }
+  | null;
 
 function eventFor(date: string, title: string) {
   return {
@@ -45,19 +52,30 @@ function eventFor(date: string, title: string) {
   };
 }
 
-function researchPass(
-  passName: PassName,
-  breakdown?: { animeCharacter: number; food: number },
-  events: Array<Record<string, unknown>> = [],
-) {
+function defaultBreakdown(passName: PassName): SearchBreakdown {
+  if (passName === "anime-character-and-food") return { animeCharacter: 8, food: 8 };
+  if (passName === "local-and-long-tail") {
+    return { watchlistChecks: 6, xDiscovery: 4, instagramDiscovery: 4, openWebVerification: 6 };
+  }
+  if (passName === "next-days-local-and-special") {
+    return { watchlistChecks: 4, xDiscovery: 3, instagramDiscovery: 3, openWebVerification: 6 };
+  }
+  return null;
+}
+
+function researchPass(passName: PassName, breakdown?: SearchBreakdown, events: Array<Record<string, unknown>> = []) {
   const isAdvance = passName.startsWith("next-days-");
+  const resolvedBreakdown = breakdown === undefined ? defaultBreakdown(passName) : breakdown;
+  const searchActions = resolvedBreakdown
+    ? Object.values(resolvedBreakdown).reduce((total, value) => total + value, 0)
+    : isAdvance ? 12 : 16;
   return {
     generatedFor: targetDate,
     targetDates: isAdvance ? ["2099-01-02", "2099-01-03"] : [targetDate],
     passName,
     generatedAt: "2099-01-01T00:00:00+09:00",
-    searchActions: breakdown ? breakdown.animeCharacter + breakdown.food : isAdvance ? 12 : 16,
-    searchBreakdown: breakdown ?? null,
+    searchActions,
+    searchBreakdown: resolvedBreakdown,
     sourcesConsulted: [`https://example.com/${passName}`],
     events,
   };
@@ -104,9 +122,10 @@ async function prepareSchema(passName: PassName) {
 
 describe("research pipeline", () => {
   it("prepares a strict output schema for each research-pass kind", async () => {
-    const [standard, dedicated, advance] = await Promise.all([
+    const [standard, dedicated, social, advance] = await Promise.all([
       prepareSchema("official-and-major"),
       prepareSchema("anime-character-and-food"),
+      prepareSchema("local-and-long-tail"),
       prepareSchema("next-days-official-and-major"),
     ]);
     try {
@@ -118,6 +137,12 @@ describe("research pipeline", () => {
       expect(standardSchema.properties.searchBreakdown).toEqual({ type: "null" });
       expect(dedicatedSchema.properties.passName.enum).toEqual(["anime-character-and-food"]);
       expect(dedicatedSchema.properties.searchBreakdown.type).toBe("object");
+      const socialSchema = JSON.parse(await readFile(social.outputPath, "utf8"));
+      expect(socialSchema.properties.searchActions.minimum).toBe(20);
+      expect(socialSchema.properties.searchActions.maximum).toBe(28);
+      expect(socialSchema.properties.searchBreakdown.required).toEqual([
+        "watchlistChecks", "xDiscovery", "instagramDiscovery", "openWebVerification",
+      ]);
       const advanceSchema = JSON.parse(await readFile(advance.outputPath, "utf8"));
       expect(advanceSchema.properties.targetDates.minItems).toBe(2);
       expect(advanceSchema.properties.targetDates.maxItems).toBe(2);
@@ -127,6 +152,7 @@ describe("research pipeline", () => {
       await Promise.all([
         rm(standard.tempDir, { recursive: true, force: true }),
         rm(dedicated.tempDir, { recursive: true, force: true }),
+        rm(social.tempDir, { recursive: true, force: true }),
         rm(advance.tempDir, { recursive: true, force: true }),
       ]);
     }
@@ -192,12 +218,16 @@ describe("research pipeline", () => {
     }
   });
 
-  it("requires an explicit null breakdown from standard passes in a three-pass run", async () => {
-    const existingOutput = "preserve-three-pass-output\n";
+  it("requires a measured social-search breakdown in a five-pass run", async () => {
+    const existingOutput = "preserve-five-pass-output\n";
+    const invalidSocialPass = researchPass("local-and-long-tail", null);
+    invalidSocialPass.searchActions = 20;
     const execution = await runMerge([
-      legacyResearchPass("official-and-major"),
-      researchPass("local-and-long-tail"),
-      researchPass("anime-character-and-food", { animeCharacter: 8, food: 8 }),
+      researchPass("official-and-major"),
+      invalidSocialPass,
+      researchPass("anime-character-and-food"),
+      researchPass("next-days-official-and-major"),
+      researchPass("next-days-local-and-special"),
     ], existingOutput);
     try {
       expect(execution.result.status).not.toBe(0);
@@ -222,6 +252,29 @@ describe("research pipeline", () => {
     }
   });
 
+  it("builds a marked social-account brief with daily and rotating sources", async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "kotake-social-brief-"));
+    const outputPath = path.join(tempDir, "social-brief.md");
+    const result = spawnSync(process.execPath, [
+      prepareSocialBriefScript,
+      researchSourcesConfig,
+      targetDate,
+      "local-and-long-tail",
+      outputPath,
+    ], { cwd: projectRoot, encoding: "utf8" });
+    try {
+      expect(result.status, result.stderr).toBe(0);
+      const brief = await readFile(outputPath, "utf8");
+      expect(brief).toContain("@event_checker");
+      expect(brief).toContain("毎日優先");
+      expect(brief).toContain("交互確認");
+      expect(brief).toContain("Peatix 東京検索");
+      expect(brief).toContain("site:x.com");
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
   it("keeps five jobs, the efficient next-days passes, and the before-seven schedule configured", async () => {
     const generationScript = await readFile(path.join(projectRoot, "scripts", "generate-events.ps1"), "utf8");
     const researchScript = await readFile(path.join(projectRoot, "scripts", "research-pass.ps1"), "utf8");
@@ -232,6 +285,8 @@ describe("research pipeline", () => {
     expect(generationScript).toContain("'next-days-local-and-special'");
     expect(generationScript).toContain("Spend 8 to 12 distinct searches on each side");
     expect(researchScript).toContain("prepare-research-schema.mjs");
+    expect(researchScript).toContain("prepare-social-brief.mjs");
+    expect(researchScript).toContain("watchlistChecks");
     expect(researchScript).toContain("'--output-schema', $passSchemaFile");
     expect(taskScript).toContain("-At '04:30'");
     expect(taskScript).toContain("-At '06:25'");
