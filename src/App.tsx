@@ -7,7 +7,6 @@ import {
   formatTimeRange,
   genreFilters,
   isEventVisible,
-  selectRecommendations,
   sortEvents,
   timingLabel,
   tokyoDate,
@@ -162,7 +161,6 @@ function App() {
     return sortEvents(filtered, sortKey);
   }, [activeEvents, search, selectedGenre, freeOnly, walkInOnly, sortKey]);
 
-  const recommendations = useMemo(() => selectRecommendations(activeEvents), [activeEvents]);
   const formattedDate = new Intl.DateTimeFormat("ja-JP", {
     timeZone: "Asia/Tokyo",
     year: "numeric",
@@ -202,21 +200,9 @@ function App() {
           </div>
         )}
 
-        {dataIsToday && recommendations.length > 0 && (
-          <section className="recommendations section-shell">
-            <div className="section-heading">
-              <div><span className="section-number">01</span><h2>今日のおすすめ</h2></div>
-              <p>参加しやすさ、面白さ、近さのバランスで選んだ最大5件。</p>
-            </div>
-            <div className="featured-grid">
-              {recommendations.map((event) => <EventCard key={event.id} event={event} featured />)}
-            </div>
-          </section>
-        )}
-
         <section className="all-events section-shell">
           <div className="section-heading">
-            <div><span className="section-number">02</span><h2>これから行けるイベント</h2></div>
+            <div><span className="section-number">01</span><h2>これから行けるイベント</h2></div>
             <p>終了したイベントは現在時刻に合わせて自動的に消えます。</p>
           </div>
 

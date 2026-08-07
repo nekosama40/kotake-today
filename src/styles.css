@@ -757,7 +757,22 @@ footer small {
   }
 
   .live-count strong {
-    font-size: 2.5rem;
+    font-size: 1.8rem;
+  }
+
+  .live-count span {
+    font-size: 0.68rem;
+  }
+
+  .timing-pill {
+    gap: 4px;
+    font-size: 0.72rem;
+  }
+
+  .timing-pill::before {
+    width: 5px;
+    height: 5px;
+    box-shadow: 0 0 0 3px rgba(227, 71, 46, 0.12);
   }
 
   .section-shell,
