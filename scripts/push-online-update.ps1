@@ -66,23 +66,38 @@ $publishMutex = [System.Threading.Mutex]::new($false, 'Local\KotakeEventsPublish
 $publishMutexAcquired = $false
 
 try {
-  try {
-    $publishMutexAcquired = $publishMutex.WaitOne([TimeSpan]::FromMinutes(10))
-  }
-  catch [System.Threading.AbandonedMutexException] {
-    $publishMutexAcquired = $true
-  }
-  if (-not $publishMutexAcquired) {
-    throw 'Publication did not become available within 10 minutes.'
-  }
+  $readyDeadline = (Get-Date).AddMinutes(10)
+  $publicationReady = $false
+  do {
+    try {
+      $publishMutexAcquired = $publishMutex.WaitOne([TimeSpan]::FromSeconds(15))
+    }
+    catch [System.Threading.AbandonedMutexException] {
+      $publishMutexAcquired = $true
+    }
 
-  $savedErrorPreference = $ErrorActionPreference
-  $ErrorActionPreference = 'Continue'
-  & node (Join-Path $PSScriptRoot 'validate-events.mjs') $publicFile $TargetDate *> $null
-  $validationExitCode = $LASTEXITCODE
-  $ErrorActionPreference = $savedErrorPreference
-  if ($validationExitCode -ne 0) {
-    throw "Validated public data for $TargetDate is not ready."
+    if ($publishMutexAcquired) {
+      $savedErrorPreference = $ErrorActionPreference
+      $ErrorActionPreference = 'Continue'
+      & node (Join-Path $PSScriptRoot 'validate-events.mjs') $publicFile $TargetDate *> $null
+      $validationExitCode = $LASTEXITCODE
+      $ErrorActionPreference = $savedErrorPreference
+      if ($validationExitCode -eq 0) {
+        $publicationReady = $true
+      }
+      else {
+        $publishMutex.ReleaseMutex()
+        $publishMutexAcquired = $false
+      }
+    }
+
+    if (-not $publicationReady -and (Get-Date) -lt $readyDeadline) {
+      Start-Sleep -Seconds 15
+    }
+  } while (-not $publicationReady -and (Get-Date) -lt $readyDeadline)
+
+  if (-not $publicationReady) {
+    throw "Validated public data for $TargetDate was not ready within 10 minutes."
   }
 
   Assert-NoStagedChanges

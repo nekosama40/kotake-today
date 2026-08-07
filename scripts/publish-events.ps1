@@ -18,13 +18,13 @@ if (-not (Test-Path -LiteralPath $pendingFile)) {
 
 try {
   try {
-    $publishMutexAcquired = $publishMutex.WaitOne(0)
+    $publishMutexAcquired = $publishMutex.WaitOne([TimeSpan]::FromMinutes(5))
   }
   catch [System.Threading.AbandonedMutexException] {
     $publishMutexAcquired = $true
   }
   if (-not $publishMutexAcquired) {
-    throw 'Another publication or online update run is active.'
+    throw 'Another publication or online update run did not finish within 5 minutes.'
   }
 
   & node (Join-Path $PSScriptRoot 'prepare-publish.mjs') $pendingFile $tempFile $TargetDate 2>&1 | Tee-Object -FilePath $logFile -Append
