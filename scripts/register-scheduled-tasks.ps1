@@ -25,7 +25,7 @@ $publishSettings = New-ScheduledTaskSettingsSet -StartWhenAvailable -WakeToRun:$
 $onlineSettings = New-ScheduledTaskSettingsSet -StartWhenAvailable -WakeToRun:$WakeComputer -MultipleInstances IgnoreNew -ExecutionTimeLimit (New-TimeSpan -Minutes 15)
 $serveSettings = New-ScheduledTaskSettingsSet -StartWhenAvailable -MultipleInstances IgnoreNew -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit ([TimeSpan]::Zero)
 
-Register-ScheduledTask -TaskName 'KotakeEvents-Generate' -Action $generateAction -Trigger $generateTrigger -Principal $principal -Settings $generateSettings -Description 'Research Tokyo events with two parallel Luna max passes at 04:45' -Force | Out-Null
+Register-ScheduledTask -TaskName 'KotakeEvents-Generate' -Action $generateAction -Trigger $generateTrigger -Principal $principal -Settings $generateSettings -Description 'Research Tokyo events with three parallel Luna max passes at 04:45, including anime/character and food focus' -Force | Out-Null
 Register-ScheduledTask -TaskName 'KotakeEvents-Publish' -Action $publishAction -Trigger $publishTrigger -Principal $principal -Settings $publishSettings -Description 'Publish validated event data locally at 06:25' -Force | Out-Null
 Register-ScheduledTask -TaskName 'KotakeEvents-Online' -Action $onlineAction -Trigger $onlineTrigger -Principal $principal -Settings $onlineSettings -Description 'Push validated event data to GitHub Pages at 06:35 for completion before 07:00' -Force | Out-Null
 Register-ScheduledTask -TaskName 'KotakeEvents-Site' -Action $serveAction -Trigger $serveTrigger -Principal $principal -Settings $serveSettings -Description 'Serve the local event site while the user is logged on' -Force | Out-Null

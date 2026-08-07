@@ -5,9 +5,12 @@ import { fileURLToPath } from "node:url";
 import sharp from "sharp";
 import { validatePayload } from "./validate-events.mjs";
 
-const [passAPath, passBPath, outputPath, targetDate] = process.argv.slice(2);
-if (!passAPath || !passBPath || !outputPath || !targetDate) {
-  console.error("Usage: node scripts/merge-events.mjs <pass-a> <pass-b> <output> <YYYY-MM-DD>");
+const argumentsList = process.argv.slice(2);
+const outputPath = argumentsList.at(-2);
+const targetDate = argumentsList.at(-1);
+const passPaths = argumentsList.slice(0, -2);
+if (passPaths.length < 2 || !outputPath || !targetDate) {
+  console.error("Usage: node scripts/merge-events.mjs <pass-1> <pass-2> [pass-3 ...] <output> <YYYY-MM-DD>");
   process.exit(2);
 }
 
@@ -19,13 +22,31 @@ const tokyoWards = new Set([
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const eventImageDir = path.join(projectRoot, "public", "images", "events");
 
-const [passA, passB] = await Promise.all([
-  fs.readFile(passAPath, "utf8").then(JSON.parse),
-  fs.readFile(passBPath, "utf8").then(JSON.parse),
-]);
+const researchPasses = await Promise.all(passPaths.map((passPath) => fs.readFile(passPath, "utf8").then(JSON.parse)));
 
-if (passA.generatedFor !== targetDate || passB.generatedFor !== targetDate) {
+if (researchPasses.some((researchPass) => researchPass.generatedFor !== targetDate)) {
   throw new Error("Research output date does not match target date.");
+}
+const passNames = new Set(researchPasses.map((researchPass) => researchPass.passName));
+if (passNames.size !== researchPasses.length) throw new Error("Research pass names must be unique.");
+for (const researchPass of researchPasses) {
+  if (!Number.isInteger(researchPass.searchActions) || researchPass.searchActions < 16 || researchPass.searchActions > 24) {
+    throw new Error(`Research pass ${researchPass.passName} must report 16 to 24 search actions.`);
+  }
+  if (researchPass.passName === "anime-character-and-food") {
+    const animeCharacter = researchPass.searchBreakdown?.animeCharacter;
+    const food = researchPass.searchBreakdown?.food;
+    if (!Number.isInteger(animeCharacter) || animeCharacter < 8 || animeCharacter > 12
+      || !Number.isInteger(food) || food < 8 || food > 12) {
+      throw new Error("Anime/character and food research must each report 8 to 12 search actions.");
+    }
+    if (animeCharacter + food !== researchPass.searchActions) {
+      throw new Error("Anime/character and food search breakdown must equal searchActions.");
+    }
+  } else if (researchPass.searchBreakdown !== null
+    && !(researchPasses.length === 2 && researchPass.searchBreakdown === undefined)) {
+    throw new Error(`Research pass ${researchPass.passName} must set searchBreakdown to null.`);
+  }
 }
 
 function normalize(value) {
@@ -136,7 +157,7 @@ async function cacheEventImage(event) {
 }
 
 const deduped = new Map();
-for (const rawEvent of [...passA.events, ...passB.events]) {
+for (const rawEvent of researchPasses.flatMap((researchPass) => researchPass.events)) {
   const event = {
     ...rawEvent,
     endAt: rawEvent.endAt !== null && Date.parse(rawEvent.endAt) > Date.parse(rawEvent.startAt)
@@ -161,7 +182,7 @@ const events = cached
   .map((event) => ({ ...event, id: stableId(event), recommendationScore: recomputeScore(event) }))
   .sort((a, b) => b.recommendationScore - a.recommendationScore || a.kotakeMinutes - b.kotakeMinutes);
 
-const sources = new Set([...passA.sourcesConsulted, ...passB.sourcesConsulted].map((url) => {
+const sources = new Set(researchPasses.flatMap((researchPass) => researchPass.sourcesConsulted).map((url) => {
   try { return new URL(url).hostname; } catch { return url; }
 }));
 
@@ -170,7 +191,7 @@ const payload = {
   generatedFor: targetDate,
   generatedAt: now,
   publishedAt: now,
-  searchPasses: 2,
+  searchPasses: researchPasses.length,
   sourceCount: sources.size,
   events,
 };
@@ -178,4 +199,4 @@ const payload = {
 const errors = validatePayload(payload, targetDate);
 if (errors.length) throw new Error(`Merged payload is invalid:\n${errors.join("\n")}`);
 await fs.writeFile(outputPath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
-console.log(`Merged ${passA.events.length} + ${passB.events.length} candidates into ${events.length} events.`);
+console.log(`Merged ${researchPasses.map((researchPass) => researchPass.events.length).join(" + ")} candidates from ${researchPasses.length} passes into ${events.length} events.`);

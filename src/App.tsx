@@ -24,6 +24,8 @@ const sortOptions: Array<{ value: SortKey; label: string }> = [
 
 const tagEmoji: Record<string, string> = {
   ゲーム: "🎮",
+  アニメ: "✧",
+  キャラクター: "★",
   展示: "◫",
   音楽: "♫",
   交流会: "◎",
@@ -186,10 +188,7 @@ function App() {
         <section className="hero">
           <div>
             <p className="eyebrow">{formattedDate}　東京23区</p>
-            <h1>今日、ふらっと<em>東京へ。</em></h1>
-            <p className="hero-copy">
-              予約なしや当日参加を中心に、Lunaが朝から幅広く調査。小竹向原から約1時間以内の、今日だけの選択肢です。
-            </p>
+            <h1>こたけから、<em>きょう。</em></h1>
           </div>
           <div className="update-stamp">
             <div className="live-count"><strong>{activeEvents.length}</strong><span>件を掲載中</span></div>

@@ -71,6 +71,7 @@ describe("event helpers", () => {
 
   it("groups detailed tags into broad filter genres", () => {
     expect(eventMatchesGenre({ ...base, tags: ["現代美術", "夜間開館"] }, "art")).toBe(true);
+    expect(eventMatchesGenre({ ...base, tags: ["キャラクター", "コラボカフェ"] }, "anime-character")).toBe(true);
     expect(eventMatchesGenre({ ...base, tags: ["ボードゲーム"] }, "game-tech")).toBe(true);
     expect(eventMatchesGenre({ ...base, tags: ["絵本", "おはなし会"] }, "family")).toBe(true);
     expect(eventMatchesGenre(base, "music")).toBe(false);

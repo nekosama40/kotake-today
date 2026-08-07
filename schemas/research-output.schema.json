@@ -3,9 +3,18 @@
   "type": "object",
   "properties": {
     "generatedFor": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
-    "passName": { "type": "string", "enum": ["official-and-major", "local-and-long-tail"] },
+    "passName": { "type": "string", "enum": ["official-and-major", "local-and-long-tail", "anime-character-and-food"] },
     "generatedAt": { "type": "string" },
-    "searchActions": { "type": "integer", "minimum": 1 },
+    "searchActions": { "type": "integer", "minimum": 16, "maximum": 24 },
+    "searchBreakdown": {
+      "type": ["object", "null"],
+      "properties": {
+        "animeCharacter": { "type": "integer", "minimum": 8, "maximum": 12 },
+        "food": { "type": "integer", "minimum": 8, "maximum": 12 }
+      },
+      "required": ["animeCharacter", "food"],
+      "additionalProperties": false
+    },
     "sourcesConsulted": {
       "type": "array",
       "items": { "type": "string" },
@@ -17,7 +26,7 @@
       "items": { "$ref": "#/$defs/event" }
     }
   },
-  "required": ["generatedFor", "passName", "generatedAt", "searchActions", "sourcesConsulted", "events"],
+  "required": ["generatedFor", "passName", "generatedAt", "searchActions", "searchBreakdown", "sourcesConsulted", "events"],
   "additionalProperties": false,
   "$defs": {
     "event": {

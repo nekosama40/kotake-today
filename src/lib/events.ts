@@ -12,7 +12,8 @@ const primaryTags = [
 ];
 
 export const genreFilters = [
-  { value: "art", label: "展示・アート", keywords: ["展示", "アート", "写真", "美術", "浮世絵", "イラスト", "アニメ", "マンガ", "ファッション", "ポップアップ", "プロジェクション"] },
+  { value: "art", label: "展示・アート", keywords: ["展示", "アート", "写真", "美術", "浮世絵", "イラスト", "ファッション", "ポップアップ", "プロジェクション"] },
+  { value: "anime-character", label: "アニメ・キャラクター", keywords: ["アニメ", "キャラクター", "マンガ", "コミック", "声優", "アニソン", "VTuber", "推し活", "コラボカフェ"] },
   { value: "music", label: "音楽・ライブ", keywords: ["音楽", "ライブ", "コンサート", "ピアノ", "DJ", "演奏"] },
   { value: "game-tech", label: "ゲーム・IT", keywords: ["ゲーム", "eスポーツ", "esports", "IT", "AI", "テクノロジー", "科学", "鉄道"] },
   { value: "experience", label: "体験・学び", keywords: ["体験", "ワークショップ", "工作", "自由研究", "スタンプラリー", "散策", "歴史", "環境", "庭園", "銭湯"] },

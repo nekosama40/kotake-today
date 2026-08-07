@@ -95,7 +95,7 @@ main {
   gap: 5vw;
   align-items: end;
   width: min(1180px, 92vw);
-  min-height: 520px;
+  min-height: 440px;
   margin: 0 auto;
   padding: 90px 0 72px;
 }
@@ -143,14 +143,6 @@ main {
 .hero h1 em {
   color: var(--red);
   font-style: normal;
-}
-
-.hero-copy {
-  max-width: 680px;
-  margin: 38px 0 0;
-  color: #514d46;
-  font-size: 1rem;
-  line-height: 2;
 }
 
 .update-stamp {
@@ -756,11 +748,6 @@ footer small {
 
   .hero h1 {
     font-size: clamp(1.8rem, 8vw, 3.2rem);
-  }
-
-  .hero-copy {
-    margin-top: 26px;
-    font-size: 0.88rem;
   }
 
   .update-stamp {
