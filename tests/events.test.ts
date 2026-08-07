@@ -4,6 +4,7 @@ import {
   formatEventDate,
   formatPublishedAt,
   formatTimeRange,
+  isEventOnDate,
   isEventToday,
   isEventVisible,
   selectRecommendations,
@@ -41,6 +42,7 @@ const base: EventItem = {
 describe("event helpers", () => {
   it("uses the Tokyo calendar date", () => {
     expect(tokyoDate(new Date("2026-08-06T16:00:00Z"))).toBe("2026-08-07");
+    expect(isEventOnDate(base, "2026-08-07")).toBe(true);
   });
 
   it("hides ended events", () => {
@@ -70,6 +72,13 @@ describe("event helpers", () => {
   it("shows explicit Tokyo dates and publication times", () => {
     expect(formatEventDate(base)).toBe("8月7日（金）");
     expect(formatPublishedAt("2026-08-06T21:45:00Z")).toBe("2026年8月7日（金） 06:45");
+  });
+
+  it("labels the next two dates clearly", () => {
+    const tomorrow = { ...base, startAt: "2026-08-08T10:00:00+09:00", endAt: "2026-08-08T20:00:00+09:00" };
+    const following = { ...base, startAt: "2026-08-09T10:00:00+09:00", endAt: "2026-08-09T20:00:00+09:00" };
+    expect(timingLabel(tomorrow, new Date("2026-08-07T03:00:00Z"))).toBe("明日");
+    expect(timingLabel(following, new Date("2026-08-07T03:00:00Z"))).toBe("明後日");
   });
 
   it("groups detailed tags into broad filter genres", () => {

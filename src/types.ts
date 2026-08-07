@@ -36,6 +36,7 @@ export interface EventItem {
 
 export interface EventsPayload {
   generatedFor: string;
+  coveredDates?: string[];
   generatedAt: string;
   publishedAt: string;
   searchPasses: number;

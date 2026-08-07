@@ -6,11 +6,12 @@ import sharp from "sharp";
 import { validatePayload } from "./validate-events.mjs";
 
 const argumentsList = process.argv.slice(2);
-const outputPath = argumentsList.at(-2);
-const targetDate = argumentsList.at(-1);
-const passPaths = argumentsList.slice(0, -2);
-if (passPaths.length < 2 || !outputPath || !targetDate) {
-  console.error("Usage: node scripts/merge-events.mjs <pass-1> <pass-2> [pass-3 ...] <output> <YYYY-MM-DD>");
+const outputPath = argumentsList.at(-3);
+const targetDate = argumentsList.at(-2);
+const previousPayloadPath = argumentsList.at(-1);
+const passPaths = argumentsList.slice(0, -3);
+if (passPaths.length < 2 || !outputPath || !targetDate || !previousPayloadPath) {
+  console.error("Usage: node scripts/merge-events.mjs <pass-1> <pass-2> [pass-3 ...] <output> <YYYY-MM-DD> <previous-payload-or->");
   process.exit(2);
 }
 
@@ -22,6 +23,18 @@ const tokyoWards = new Set([
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const eventImageDir = path.join(projectRoot, "public", "images", "events");
 
+function addIsoDays(value, days) {
+  const date = new Date(`${value}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+const todayPasses = new Set(["official-and-major", "local-and-long-tail", "anime-character-and-food"]);
+const advancePasses = new Set(["next-days-official-and-major", "next-days-local-and-special"]);
+const expectedTodayDates = [targetDate];
+const expectedAdvanceDates = [addIsoDays(targetDate, 1), addIsoDays(targetDate, 2)];
+const expectedFivePasses = new Set([...todayPasses, ...advancePasses]);
+
 const researchPasses = await Promise.all(passPaths.map((passPath) => fs.readFile(passPath, "utf8").then(JSON.parse)));
 
 if (researchPasses.some((researchPass) => researchPass.generatedFor !== targetDate)) {
@@ -29,9 +42,26 @@ if (researchPasses.some((researchPass) => researchPass.generatedFor !== targetDa
 }
 const passNames = new Set(researchPasses.map((researchPass) => researchPass.passName));
 if (passNames.size !== researchPasses.length) throw new Error("Research pass names must be unique.");
+if (researchPasses.length === 5
+  && (passNames.size !== expectedFivePasses.size || [...expectedFivePasses].some((passName) => !passNames.has(passName)))) {
+  throw new Error("A five-pass run must contain the three today passes and both next-days passes.");
+}
 for (const researchPass of researchPasses) {
-  if (!Number.isInteger(researchPass.searchActions) || researchPass.searchActions < 16 || researchPass.searchActions > 24) {
-    throw new Error(`Research pass ${researchPass.passName} must report 16 to 24 search actions.`);
+  const isTodayPass = todayPasses.has(researchPass.passName);
+  const isAdvancePass = advancePasses.has(researchPass.passName);
+  if (!isTodayPass && !isAdvancePass) throw new Error(`Unsupported research pass: ${researchPass.passName}`);
+
+  const targetDates = researchPass.targetDates ?? [researchPass.generatedFor];
+  const expectedDates = isAdvancePass ? expectedAdvanceDates : expectedTodayDates;
+  if (JSON.stringify(targetDates) !== JSON.stringify(expectedDates)) {
+    throw new Error(`Research pass ${researchPass.passName} has invalid targetDates.`);
+  }
+  researchPass.targetDates = targetDates;
+
+  const searchMin = isAdvancePass ? 12 : 16;
+  const searchMax = isAdvancePass ? 18 : 24;
+  if (!Number.isInteger(researchPass.searchActions) || researchPass.searchActions < searchMin || researchPass.searchActions > searchMax) {
+    throw new Error(`Research pass ${researchPass.passName} must report ${searchMin} to ${searchMax} search actions.`);
   }
   if (researchPass.passName === "anime-character-and-food") {
     const animeCharacter = researchPass.searchBreakdown?.animeCharacter;
@@ -157,22 +187,49 @@ async function cacheEventImage(event) {
 }
 
 const deduped = new Map();
-for (const rawEvent of researchPasses.flatMap((researchPass) => researchPass.events)) {
+
+function addResearchEvent(rawEvent) {
   const event = {
     ...rawEvent,
     endAt: rawEvent.endAt !== null && Date.parse(rawEvent.endAt) > Date.parse(rawEvent.startAt)
       ? rawEvent.endAt
       : null,
   };
-  if (event.startAt.slice(0, 10) !== targetDate) continue;
-  if (!tokyoWards.has(event.ward)) continue;
-  if (event.kotakeMinutes > 60) continue;
+  if (!tokyoWards.has(event.ward)) return;
+  if (event.kotakeMinutes > 60) return;
   const key = dedupeKey(event);
   const current = deduped.get(key);
   if (!current || confidenceWeight(event.confidence) > confidenceWeight(current.confidence) || event.recommendationScore > current.recommendationScore) {
     deduped.set(key, event);
   } else {
     current.tags = [...new Set([...current.tags, ...event.tags])].slice(0, 8);
+  }
+}
+
+for (const researchPass of researchPasses) {
+  for (const rawEvent of researchPass.events) {
+    if (!researchPass.targetDates.includes(rawEvent.startAt.slice(0, 10))) continue;
+    addResearchEvent(rawEvent);
+  }
+}
+
+let previousPayload = null;
+if (previousPayloadPath !== "-") {
+  try {
+    previousPayload = JSON.parse((await fs.readFile(previousPayloadPath, "utf8")).replace(/^\uFEFF/, ""));
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error;
+  }
+}
+
+let carriedEndedCount = 0;
+if (previousPayload?.generatedFor === targetDate) {
+  for (const previousEvent of previousPayload.events ?? []) {
+    if (previousEvent.startAt.slice(0, 10) !== targetDate) continue;
+    const key = dedupeKey(previousEvent);
+    if (deduped.has(key)) continue;
+    addResearchEvent(previousEvent);
+    carriedEndedCount += 1;
   }
 }
 
@@ -187,8 +244,10 @@ const sources = new Set(researchPasses.flatMap((researchPass) => researchPass.so
 }));
 
 const now = new Date().toISOString();
+const coveredDates = [...new Set(researchPasses.flatMap((researchPass) => researchPass.targetDates))].sort();
 const payload = {
   generatedFor: targetDate,
+  coveredDates,
   generatedAt: now,
   publishedAt: now,
   searchPasses: researchPasses.length,
@@ -199,4 +258,4 @@ const payload = {
 const errors = validatePayload(payload, targetDate);
 if (errors.length) throw new Error(`Merged payload is invalid:\n${errors.join("\n")}`);
 await fs.writeFile(outputPath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
-console.log(`Merged ${researchPasses.map((researchPass) => researchPass.events.length).join(" + ")} candidates from ${researchPasses.length} passes into ${events.length} events.`);
+console.log(`Merged ${researchPasses.map((researchPass) => researchPass.events.length).join(" + ")} candidates from ${researchPasses.length} passes into ${events.length} events across ${coveredDates.length} days; preserved ${carriedEndedCount} same-day events from the earlier publication.`);

@@ -16,6 +16,23 @@ export function validatePayload(payload, expectedDate) {
   if (!payload || typeof payload !== "object") return ["payload must be an object"];
   if (!/^\d{4}-\d{2}-\d{2}$/.test(payload.generatedFor ?? "")) errors.push("generatedFor must be YYYY-MM-DD");
   if (expectedDate && payload.generatedFor !== expectedDate) errors.push(`generatedFor must be ${expectedDate}`);
+  const coveredDates = payload.coveredDates ?? [payload.generatedFor];
+  const validCoveredDates = Array.isArray(coveredDates) ? coveredDates : [];
+  if (!Array.isArray(coveredDates) || coveredDates.length < 1 || coveredDates.length > 3) {
+    errors.push("coveredDates must contain one to three dates");
+  } else {
+    if (new Set(coveredDates).size !== coveredDates.length) errors.push("coveredDates must be unique");
+    if (coveredDates[0] !== payload.generatedFor) errors.push("coveredDates must start with generatedFor");
+    for (const [index, date] of coveredDates.entries()) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date ?? "")) {
+        errors.push(`coveredDates[${index}] must be YYYY-MM-DD`);
+        continue;
+      }
+      const expectedCoveredDate = new Date(`${payload.generatedFor}T00:00:00Z`);
+      expectedCoveredDate.setUTCDate(expectedCoveredDate.getUTCDate() + index);
+      if (date !== expectedCoveredDate.toISOString().slice(0, 10)) errors.push("coveredDates must be consecutive");
+    }
+  }
   if (!Array.isArray(payload.events)) errors.push("events must be an array");
   if (!Number.isInteger(payload.searchPasses) || payload.searchPasses < 1) errors.push("searchPasses must be a positive integer");
   if (!Number.isInteger(payload.sourceCount) || payload.sourceCount < 0) errors.push("sourceCount must be a non-negative integer");
@@ -37,7 +54,7 @@ export function validatePayload(payload, expectedDate) {
     if (!Array.isArray(event.tags) || event.tags.length === 0) errors.push(`${prefix}.tags must not be empty`);
     if (!/^https:\/\//i.test(event.sourceUrl ?? "")) errors.push(`${prefix}.sourceUrl must use https`);
     if (Number.isNaN(Date.parse(event.startAt)) || (event.endAt !== null && Number.isNaN(Date.parse(event.endAt)))) errors.push(`${prefix} has invalid times`);
-    if ((event.startAt ?? "").slice(0, 10) !== payload.generatedFor) errors.push(`${prefix}.startAt is not on generatedFor`);
+    if (!validCoveredDates.includes((event.startAt ?? "").slice(0, 10))) errors.push(`${prefix}.startAt is outside coveredDates`);
     if (event.endAt !== null && Date.parse(event.endAt) <= Date.parse(event.startAt)) errors.push(`${prefix}.endAt must be after startAt or null`);
     if (!event.image || typeof event.image !== "object") errors.push(`${prefix}.image is required`);
     if (event.image?.url !== null && !/^(?:https:\/\/|\/images\/events\/)/i.test(event.image?.url ?? "")) errors.push(`${prefix}.image.url must be a cached event image, https, or null`);

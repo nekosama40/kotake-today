@@ -11,27 +11,70 @@ const prepareSchemaScript = path.join(projectRoot, "scripts", "prepare-research-
 const schemaTemplate = path.join(projectRoot, "schemas", "research-output.schema.json");
 const targetDate = "2099-01-01";
 
-type PassName = "official-and-major" | "local-and-long-tail" | "anime-character-and-food";
+type PassName =
+  | "official-and-major"
+  | "local-and-long-tail"
+  | "anime-character-and-food"
+  | "next-days-official-and-major"
+  | "next-days-local-and-special";
 
-function researchPass(passName: PassName, breakdown?: { animeCharacter: number; food: number }) {
+function eventFor(date: string, title: string) {
+  return {
+    id: "candidate",
+    title,
+    summary: "説明",
+    startAt: `${date}T10:00:00+09:00`,
+    endAt: `${date}T18:00:00+09:00`,
+    venueName: "会場",
+    ward: "豊島区",
+    nearestStation: "池袋駅",
+    kotakeMinutes: 20,
+    priceLabel: "無料",
+    minPriceYen: 0,
+    isFree: true,
+    availability: "walk_in",
+    reservation: "not_required",
+    sameDayNote: "自由入場",
+    tags: ["展示"],
+    sourceLabel: "公式",
+    sourceUrl: `https://example.com/${date}/${encodeURIComponent(title)}`,
+    lastCheckedAt: `${date}T06:00:00+09:00`,
+    image: { url: null, alt: `${title}の画像`, attribution: null, sourceUrl: null },
+    confidence: "high",
+    recommendationScore: 80,
+  };
+}
+
+function researchPass(
+  passName: PassName,
+  breakdown?: { animeCharacter: number; food: number },
+  events: Array<Record<string, unknown>> = [],
+) {
+  const isAdvance = passName.startsWith("next-days-");
   return {
     generatedFor: targetDate,
+    targetDates: isAdvance ? ["2099-01-02", "2099-01-03"] : [targetDate],
     passName,
     generatedAt: "2099-01-01T00:00:00+09:00",
-    searchActions: breakdown ? breakdown.animeCharacter + breakdown.food : 16,
+    searchActions: breakdown ? breakdown.animeCharacter + breakdown.food : isAdvance ? 12 : 16,
     searchBreakdown: breakdown ?? null,
     sourcesConsulted: [`https://example.com/${passName}`],
-    events: [],
+    events,
   };
 }
 
 function legacyResearchPass(passName: Exclude<PassName, "anime-character-and-food">) {
   const pass = { ...researchPass(passName) } as Record<string, unknown>;
   delete pass.searchBreakdown;
+  delete pass.targetDates;
   return pass;
 }
 
-async function runMerge(passes: Array<Record<string, unknown>>, existingOutput?: string) {
+async function runMerge(
+  passes: Array<Record<string, unknown>>,
+  existingOutput?: string,
+  previousPayload?: Record<string, unknown>,
+) {
   const tempDir = await mkdtemp(path.join(os.tmpdir(), "kotake-merge-"));
   const passPaths = await Promise.all(passes.map(async (pass, index) => {
     const passPath = path.join(tempDir, `pass-${index}.json`);
@@ -39,8 +82,10 @@ async function runMerge(passes: Array<Record<string, unknown>>, existingOutput?:
     return passPath;
   }));
   const outputPath = path.join(tempDir, "events.json");
+  const previousPath = path.join(tempDir, "previous.json");
   if (existingOutput !== undefined) await writeFile(outputPath, existingOutput, "utf8");
-  const result = spawnSync(process.execPath, [mergeScript, ...passPaths, outputPath, targetDate], {
+  if (previousPayload) await writeFile(previousPath, JSON.stringify(previousPayload), "utf8");
+  const result = spawnSync(process.execPath, [mergeScript, ...passPaths, outputPath, targetDate, previousPayload ? previousPath : "-"], {
     cwd: projectRoot,
     encoding: "utf8",
   });
@@ -59,9 +104,10 @@ async function prepareSchema(passName: PassName) {
 
 describe("research pipeline", () => {
   it("prepares a strict output schema for each research-pass kind", async () => {
-    const [standard, dedicated] = await Promise.all([
+    const [standard, dedicated, advance] = await Promise.all([
       prepareSchema("official-and-major"),
       prepareSchema("anime-character-and-food"),
+      prepareSchema("next-days-official-and-major"),
     ]);
     try {
       expect(standard.result.status, standard.result.stderr).toBe(0);
@@ -72,24 +118,34 @@ describe("research pipeline", () => {
       expect(standardSchema.properties.searchBreakdown).toEqual({ type: "null" });
       expect(dedicatedSchema.properties.passName.enum).toEqual(["anime-character-and-food"]);
       expect(dedicatedSchema.properties.searchBreakdown.type).toBe("object");
+      const advanceSchema = JSON.parse(await readFile(advance.outputPath, "utf8"));
+      expect(advanceSchema.properties.targetDates.minItems).toBe(2);
+      expect(advanceSchema.properties.targetDates.maxItems).toBe(2);
+      expect(advanceSchema.properties.searchActions.minimum).toBe(12);
+      expect(advanceSchema.properties.searchActions.maximum).toBe(18);
     } finally {
       await Promise.all([
         rm(standard.tempDir, { recursive: true, force: true }),
         rm(dedicated.tempDir, { recursive: true, force: true }),
+        rm(advance.tempDir, { recursive: true, force: true }),
       ]);
     }
   });
 
-  it("merges all three distinct research passes", async () => {
+  it("merges all five distinct research passes across three days", async () => {
     const execution = await runMerge([
       researchPass("official-and-major"),
       researchPass("local-and-long-tail"),
       researchPass("anime-character-and-food", { animeCharacter: 8, food: 8 }),
+      researchPass("next-days-official-and-major", undefined, [eventFor("2099-01-02", "明日のイベント")]),
+      researchPass("next-days-local-and-special", undefined, [eventFor("2099-01-03", "明後日のイベント")]),
     ]);
     try {
       expect(execution.result.status, execution.result.stderr).toBe(0);
       const output = JSON.parse(await readFile(execution.outputPath, "utf8"));
-      expect(output.searchPasses).toBe(3);
+      expect(output.searchPasses).toBe(5);
+      expect(output.coveredDates).toEqual(["2099-01-01", "2099-01-02", "2099-01-03"]);
+      expect(output.events.map((event: { startAt: string }) => event.startAt.slice(0, 10))).toEqual(["2099-01-02", "2099-01-03"]);
     } finally {
       await rm(execution.tempDir, { recursive: true, force: true });
     }
@@ -104,6 +160,33 @@ describe("research pipeline", () => {
       expect(execution.result.status, execution.result.stderr).toBe(0);
       const output = JSON.parse(await readFile(execution.outputPath, "utf8"));
       expect(output.searchPasses).toBe(2);
+    } finally {
+      await rm(execution.tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("preserves already-published same-day events on a later rerun", async () => {
+    const passes = [
+      researchPass("official-and-major"),
+      researchPass("local-and-long-tail"),
+      researchPass("anime-character-and-food", { animeCharacter: 8, food: 8 }),
+      researchPass("next-days-official-and-major"),
+      researchPass("next-days-local-and-special"),
+    ];
+    const previousPayload = {
+      generatedFor: targetDate,
+      coveredDates: [targetDate],
+      generatedAt: "2099-01-01T00:00:00+09:00",
+      publishedAt: "2099-01-01T07:00:00+09:00",
+      searchPasses: 3,
+      sourceCount: 1,
+      events: [eventFor(targetDate, "朝に掲載済みのイベント")],
+    };
+    const execution = await runMerge(passes, undefined, previousPayload);
+    try {
+      expect(execution.result.status, execution.result.stderr).toBe(0);
+      const output = JSON.parse(await readFile(execution.outputPath, "utf8"));
+      expect(output.events.map((event: { title: string }) => event.title)).toContain("朝に掲載済みのイベント");
     } finally {
       await rm(execution.tempDir, { recursive: true, force: true });
     }
@@ -139,16 +222,18 @@ describe("research pipeline", () => {
     }
   });
 
-  it("keeps three jobs, the dedicated split, and the before-seven schedule configured", async () => {
+  it("keeps five jobs, the efficient next-days passes, and the before-seven schedule configured", async () => {
     const generationScript = await readFile(path.join(projectRoot, "scripts", "generate-events.ps1"), "utf8");
     const researchScript = await readFile(path.join(projectRoot, "scripts", "research-pass.ps1"), "utf8");
     const taskScript = await readFile(path.join(projectRoot, "scripts", "register-scheduled-tasks.ps1"), "utf8");
-    expect(generationScript.match(/Start-Job -Name/g)).toHaveLength(3);
+    expect(generationScript.match(/Start-Job -Name/g)).toHaveLength(5);
     expect(generationScript).toContain("'anime-character-and-food'");
+    expect(generationScript).toContain("'next-days-official-and-major'");
+    expect(generationScript).toContain("'next-days-local-and-special'");
     expect(generationScript).toContain("Spend 8 to 12 distinct searches on each side");
     expect(researchScript).toContain("prepare-research-schema.mjs");
     expect(researchScript).toContain("'--output-schema', $passSchemaFile");
-    expect(taskScript).toContain("-At '04:45'");
+    expect(taskScript).toContain("-At '04:30'");
     expect(taskScript).toContain("-At '06:25'");
     expect(taskScript).toContain("-At '06:35'");
   });

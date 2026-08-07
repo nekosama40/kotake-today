@@ -77,7 +77,11 @@ export function eventMatchesGenre(event: EventItem, genre: GenreFilterValue): bo
 }
 
 export function isEventToday(event: EventItem, now = new Date()): boolean {
-  return event.startAt.slice(0, 10) === tokyoDate(now);
+  return isEventOnDate(event, tokyoDate(now));
+}
+
+export function isEventOnDate(event: EventItem, date: string): boolean {
+  return event.startAt.slice(0, 10) === date;
 }
 
 export function isEventVisible(event: EventItem, now = new Date()): boolean {
@@ -137,6 +141,16 @@ export function formatTimeRange(event: EventItem): string {
 }
 
 export function timingLabel(event: EventItem, now = new Date()): string {
+  const eventDay = event.startAt.slice(0, 10);
+  const currentDay = tokyoDate(now);
+  if (eventDay > currentDay) {
+    const eventDate = new Date(`${eventDay}T00:00:00Z`).getTime();
+    const currentDate = new Date(`${currentDay}T00:00:00Z`).getTime();
+    const dayDifference = Math.round((eventDate - currentDate) / 86_400_000);
+    if (dayDifference === 1) return "明日";
+    if (dayDifference === 2) return "明後日";
+    return "予定";
+  }
   const start = /^\d{4}-\d{2}-\d{2}$/.test(event.startAt)
     ? new Date(`${event.startAt}T00:00:00+09:00`).getTime()
     : new Date(event.startAt).getTime();

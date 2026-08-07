@@ -508,12 +508,50 @@ main {
   padding-bottom: 120px;
 }
 
+.date-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.date-tabs button {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 9px;
+  min-height: 54px;
+  border: 1px solid var(--line);
+  background: rgba(255, 253, 247, 0.58);
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.date-tabs button:hover,
+.date-tabs button.active {
+  border-color: var(--blue);
+  background: var(--blue);
+  color: white;
+}
+
+.date-tabs span {
+  font-size: 0.72rem;
+}
+
+.date-tabs strong {
+  font-size: 0.9rem;
+}
+
 .controls {
   display: grid;
   grid-template-columns: minmax(240px, 1fr) minmax(180px, auto) auto auto auto;
   gap: 12px;
   align-items: stretch;
   margin-bottom: 20px;
+}
+
+.controls.without-ended {
+  grid-template-columns: minmax(240px, 1fr) minmax(180px, auto) auto auto;
 }
 
 .search-box,
@@ -707,6 +745,10 @@ footer small {
     margin-bottom: 12px;
   }
 
+  .controls.without-ended {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .search-box,
   .sort-box,
   .toggle {
@@ -786,6 +828,26 @@ footer small {
     text-align: left;
   }
 
+  .date-tabs {
+    gap: 6px;
+    margin-bottom: 10px;
+  }
+
+  .date-tabs button {
+    flex-direction: column;
+    align-items: center;
+    gap: 1px;
+    min-height: 48px;
+  }
+
+  .date-tabs span {
+    font-size: 0.62rem;
+  }
+
+  .date-tabs strong {
+    font-size: 0.76rem;
+  }
+
   .featured-grid {
     display: flex;
     gap: 16px;
@@ -806,7 +868,11 @@ footer small {
   }
 
   .controls {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .controls.without-ended {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .search-box,

@@ -6,7 +6,7 @@ import {
   formatPublishedAt,
   formatTimeRange,
   genreFilters,
-  isEventToday,
+  isEventOnDate,
   isEventVisible,
   sortEvents,
   timingLabel,
@@ -42,6 +42,28 @@ function fallbackGlyph(event: EventItem): string {
 function assetUrl(value: string): string {
   if (/^https:\/\//i.test(value)) return value;
   return `${import.meta.env.BASE_URL}${value.replace(/^\/+/, "")}`;
+}
+
+function dateDifference(date: string, baseDate: string): number {
+  return Math.round((new Date(`${date}T00:00:00Z`).getTime() - new Date(`${baseDate}T00:00:00Z`).getTime()) / 86_400_000);
+}
+
+function relativeDateLabel(date: string, today: string): string {
+  const difference = dateDifference(date, today);
+  if (difference === 0) return "今日";
+  if (difference === 1) return "明日";
+  if (difference === 2) return "明後日";
+  return "予定";
+}
+
+function compactDateLabel(date: string): string {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat("ja-JP", {
+    timeZone: "Asia/Tokyo",
+    month: "numeric",
+    day: "numeric",
+    weekday: "short",
+  }).formatToParts(new Date(`${date}T00:00:00+09:00`)).map((part) => [part.type, part.value]));
+  return `${parts.month}/${parts.day}（${parts.weekday}）`;
 }
 
 function EventVisual({ event, featured = false }: { event: EventItem; featured?: boolean }) {
@@ -116,6 +138,7 @@ function App() {
   const [freeOnly, setFreeOnly] = useState(false);
   const [walkInOnly, setWalkInOnly] = useState(false);
   const [showEnded, setShowEnded] = useState(false);
+  const [selectedDate, setSelectedDate] = useState(() => tokyoDate());
   const [clock, setClock] = useState(new Date());
 
   useEffect(() => {
@@ -133,16 +156,28 @@ function App() {
       .catch((reason: Error) => setError(reason.message));
   }, []);
 
-  const dataIsToday = payload?.generatedFor === tokyoDate(clock);
-  const todayEvents = useMemo(() => {
-    if (!payload || !dataIsToday) return [];
-    return payload.events.filter((event) => isEventToday(event, clock));
-  }, [payload, dataIsToday, clock]);
+  const currentTokyoDate = tokyoDate(clock);
+  const coveredDates = useMemo(() => {
+    if (!payload) return [];
+    return payload.coveredDates?.length ? payload.coveredDates : [payload.generatedFor];
+  }, [payload]);
+  const dataIsCurrent = payload?.generatedFor === currentTokyoDate && coveredDates.includes(currentTokyoDate);
+  const selectedIsToday = selectedDate === currentTokyoDate;
+
+  useEffect(() => {
+    if (coveredDates.length === 0 || coveredDates.includes(selectedDate)) return;
+    setSelectedDate(coveredDates.includes(currentTokyoDate) ? currentTokyoDate : coveredDates[0]);
+  }, [coveredDates, currentTokyoDate, selectedDate]);
+
+  const selectedDateEvents = useMemo(() => {
+    if (!payload || !dataIsCurrent) return [];
+    return payload.events.filter((event) => isEventOnDate(event, selectedDate));
+  }, [payload, dataIsCurrent, selectedDate]);
 
   const visibleEvents = useMemo(() => {
-    if (showEnded) return todayEvents;
-    return todayEvents.filter((event) => isEventVisible(event, clock));
-  }, [todayEvents, showEnded, clock]);
+    if (!selectedIsToday || showEnded) return selectedDateEvents;
+    return selectedDateEvents.filter((event) => isEventVisible(event, clock));
+  }, [selectedDateEvents, selectedIsToday, showEnded, clock]);
 
   const availableGenres = useMemo(() => {
     return genreFilters.filter((genre) => visibleEvents.some((event) => eventMatchesGenre(event, genre.value)));
@@ -176,6 +211,10 @@ function App() {
     day: "numeric",
     weekday: "long",
   }).format(clock);
+  const selectedRelativeLabel = relativeDateLabel(selectedDate, currentTokyoDate);
+  const sectionTitle = selectedIsToday
+    ? (showEnded ? "今日のイベント" : "これから行けるイベント")
+    : `${selectedRelativeLabel}のイベント`;
 
   if (error) return <main className="state-page"><p>{error}</p></main>;
   if (!payload) return <main className="state-page"><div className="loader" /><p>今日の東京を探しています</p></main>;
@@ -201,7 +240,7 @@ function App() {
           </div>
         </section>
 
-        {!dataIsToday && (
+        {!dataIsCurrent && (
           <div className="notice">
             今日の更新データを待っています。前回の情報は日付違いを防ぐため非表示にしています。
           </div>
@@ -209,11 +248,26 @@ function App() {
 
         <section className="all-events section-shell">
           <div className="section-heading">
-            <div><span className="section-number">01</span><h2>{showEnded ? "今日のイベント" : "これから行けるイベント"}</h2></div>
-            <p>終了分は「終了」で確認できます。</p>
+            <div><span className="section-number">01</span><h2>{sectionTitle}</h2></div>
+            <p>{selectedIsToday ? "終了分は「終了」で確認できます。" : "参加条件と空き状況は毎朝確認しています。"}</p>
           </div>
 
-          <div className="controls">
+          <nav className="date-tabs" aria-label="表示する日付">
+            {coveredDates.map((date) => (
+              <button
+                key={date}
+                type="button"
+                className={selectedDate === date ? "active" : ""}
+                aria-pressed={selectedDate === date}
+                onClick={() => setSelectedDate(date)}
+              >
+                <span>{relativeDateLabel(date, currentTokyoDate)}</span>
+                <strong>{compactDateLabel(date)}</strong>
+              </button>
+            ))}
+          </nav>
+
+          <div className={`controls ${selectedIsToday ? "" : "without-ended"}`}>
             <label className="search-box">
               <span>⌕</span>
               <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="イベント名・会場・ジャンルで検索" />
@@ -226,7 +280,7 @@ function App() {
             </label>
             <label className="toggle"><input type="checkbox" checked={freeOnly} onChange={(event) => setFreeOnly(event.target.checked)} /><span>無料のみ</span></label>
             <label className="toggle"><input type="checkbox" checked={walkInOnly} onChange={(event) => setWalkInOnly(event.target.checked)} /><span>予約不要</span></label>
-            <label className="toggle"><input type="checkbox" checked={showEnded} onChange={(event) => setShowEnded(event.target.checked)} /><span>終了</span></label>
+            {selectedIsToday && <label className="toggle"><input type="checkbox" checked={showEnded} onChange={(event) => setShowEnded(event.target.checked)} /><span>終了</span></label>}
           </div>
 
           <div className="tag-filter" role="list" aria-label="ジャンルで絞り込む">
@@ -241,7 +295,7 @@ function App() {
               {filteredEvents.map((event) => <EventCard key={event.id} event={event} />)}
             </div>
           ) : (
-            <div className="empty-state"><span>○</span><p>この条件に合う今日のイベントは見つかりませんでした。</p></div>
+            <div className="empty-state"><span>○</span><p>この条件に合う{selectedRelativeLabel}のイベントは見つかりませんでした。</p></div>
           )}
         </section>
 
