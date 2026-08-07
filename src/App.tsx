@@ -189,7 +189,6 @@ function App() {
             <h1>こたけから、<em>きょう。</em></h1>
           </div>
           <div className="update-stamp">
-            <div className="live-count"><strong>{activeEvents.length}</strong><span>件を掲載中</span></div>
             <time dateTime={payload.publishedAt}><small>最終更新</small><strong>{formatPublishedAt(payload.publishedAt)}</strong></time>
           </div>
         </section>

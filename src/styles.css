@@ -146,41 +146,15 @@ main {
 }
 
 .update-stamp {
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  width: 220px;
-  min-height: 176px;
-  padding: 24px;
-  border: 1px solid rgba(30, 61, 143, 0.35);
-  border-radius: 4px;
-  background: rgba(255, 253, 247, 0.66);
+  padding: 3px 0 3px 16px;
+  border-left: 2px solid rgba(30, 61, 143, 0.35);
   color: var(--blue);
-}
-
-.live-count {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-}
-
-.live-count strong {
-  font-family: "Shippori Mincho", serif;
-  font-size: 3.2rem;
-  line-height: 1;
-}
-
-.live-count span {
-  font-size: 0.78rem;
-  font-weight: 700;
 }
 
 .update-stamp time {
   display: flex;
   flex-direction: column;
-  gap: 5px;
-  padding-top: 16px;
-  border-top: 1px solid rgba(30, 61, 143, 0.22);
+  gap: 3px;
 }
 
 .update-stamp time small {
@@ -708,8 +682,9 @@ footer small {
   }
 
   .update-stamp {
-    width: min(100%, 360px);
-    min-height: 150px;
+    width: auto;
+    min-height: 0;
+    justify-self: start;
   }
 
   .featured-card,
@@ -724,6 +699,14 @@ footer small {
 
   .controls {
     grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+
+  .search-box,
+  .sort-box,
+  .toggle {
+    min-height: 44px;
   }
 
 }
@@ -739,7 +722,8 @@ footer small {
 
   .hero {
     width: min(92vw, 520px);
-    padding: 58px 0 52px;
+    gap: 12px;
+    padding: 34px 0 26px;
   }
 
   .hero::before {
@@ -750,18 +734,19 @@ footer small {
     font-size: clamp(1.8rem, 8vw, 3.2rem);
   }
 
+  .eyebrow {
+    margin-bottom: 14px;
+  }
+
   .update-stamp {
-    width: 100%;
-    min-height: 0;
-    padding: 20px;
+    width: auto;
+    padding: 2px 0 2px 10px;
   }
 
-  .live-count strong {
-    font-size: 1.8rem;
-  }
-
-  .live-count span {
-    font-size: 0.68rem;
+  .update-stamp time {
+    flex-direction: row;
+    align-items: baseline;
+    gap: 8px;
   }
 
   .timing-pill {
@@ -775,18 +760,25 @@ footer small {
     box-shadow: 0 0 0 3px rgba(227, 71, 46, 0.12);
   }
 
-  .section-shell,
-  .recommendations {
-    padding-top: 62px;
-    padding-bottom: 62px;
+  .section-shell {
+    padding-top: 36px;
+    padding-bottom: 48px;
   }
 
   .section-heading {
     display: block;
+    margin-bottom: 22px;
+    padding-bottom: 14px;
+  }
+
+  .section-heading h2 {
+    font-size: 1.65rem;
   }
 
   .section-heading p {
-    margin-top: 12px;
+    margin-top: 8px;
+    font-size: 0.78rem;
+    line-height: 1.5;
     text-align: left;
   }
 
@@ -820,10 +812,70 @@ footer small {
 
   .toggle {
     justify-content: center;
+    padding: 0 9px;
+    font-size: 0.7rem;
+  }
+
+  .tag-filter {
+    gap: 6px;
+    margin-bottom: 18px;
+  }
+
+  .tag-filter button {
+    padding: 7px 10px;
   }
 
   .event-grid {
     grid-template-columns: 1fr;
+    gap: 14px;
+  }
+
+  .event-visual {
+    height: 180px;
+  }
+
+  .event-card-body {
+    padding: 16px;
+  }
+
+  .event-schedule {
+    gap: 8px;
+    margin-top: 12px;
+    padding: 10px 0;
+  }
+
+  .event-card h3 {
+    margin: 12px 0 8px;
+    font-size: 1.16rem;
+  }
+
+  .summary {
+    min-height: 0;
+    font-size: 0.82rem;
+    line-height: 1.6;
+  }
+
+  .location-line {
+    margin-top: 14px;
+    padding-top: 12px;
+  }
+
+  .facts {
+    gap: 6px;
+    margin-top: 10px;
+  }
+
+  .facts span {
+    padding: 5px 7px;
+  }
+
+  .availability {
+    margin-top: 10px;
+  }
+
+  .tag-row {
+    gap: 6px;
+    margin-top: 10px;
   }
 
   footer {
