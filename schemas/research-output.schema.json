@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "generatedFor": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+    "passName": { "type": "string", "enum": ["official-and-major", "local-and-long-tail"] },
+    "generatedAt": { "type": "string" },
+    "searchActions": { "type": "integer", "minimum": 1 },
+    "sourcesConsulted": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 1
+    },
+    "events": {
+      "type": "array",
+      "maxItems": 80,
+      "items": { "$ref": "#/$defs/event" }
+    }
+  },
+  "required": ["generatedFor", "passName", "generatedAt", "searchActions", "sourcesConsulted", "events"],
+  "additionalProperties": false,
+  "$defs": {
+    "event": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "summary": { "type": "string" },
+        "startAt": { "type": "string" },
+        "endAt": { "type": ["string", "null"] },
+        "venueName": { "type": "string" },
+        "ward": { "type": "string" },
+        "nearestStation": { "type": "string" },
+        "kotakeMinutes": { "type": "integer", "minimum": 1, "maximum": 60 },
+        "priceLabel": { "type": "string" },
+        "minPriceYen": { "type": ["integer", "null"], "minimum": 0 },
+        "isFree": { "type": "boolean" },
+        "availability": {
+          "type": "string",
+          "enum": ["walk_in", "same_day_ticket", "registration_open", "unknown"]
+        },
+        "reservation": {
+          "type": "string",
+          "enum": ["not_required", "recommended", "required", "unknown"]
+        },
+        "sameDayNote": { "type": "string" },
+        "tags": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1,
+          "maxItems": 8
+        },
+        "sourceLabel": { "type": "string" },
+        "sourceUrl": { "type": "string" },
+        "lastCheckedAt": { "type": "string" },
+        "image": {
+          "type": "object",
+          "properties": {
+            "url": { "type": ["string", "null"] },
+            "alt": { "type": "string" },
+            "attribution": { "type": ["string", "null"] },
+            "sourceUrl": { "type": ["string", "null"] }
+          },
+          "required": ["url", "alt", "attribution", "sourceUrl"],
+          "additionalProperties": false
+        },
+        "confidence": { "type": "string", "enum": ["high", "medium", "low"] },
+        "recommendationScore": { "type": "integer", "minimum": 0, "maximum": 100 }
+      },
+      "required": [
+        "id", "title", "summary", "startAt", "endAt", "venueName", "ward",
+        "nearestStation", "kotakeMinutes", "priceLabel", "minPriceYen", "isFree",
+        "availability", "reservation", "sameDayNote", "tags", "sourceLabel",
+        "sourceUrl", "lastCheckedAt", "image", "confidence", "recommendationScore"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

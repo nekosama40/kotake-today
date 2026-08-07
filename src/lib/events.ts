@@ -1,0 +1,97 @@
+import type { EventItem, SortKey } from "../types";
+
+const primaryTags = [
+  "ゲーム",
+  "展示",
+  "音楽",
+  "交流会",
+  "体験",
+  "フード",
+  "地域",
+  "テクノロジー",
+];
+
+export function tokyoDate(date = new Date()): string {
+  return new Intl.DateTimeFormat("sv-SE", {
+    timeZone: "Asia/Tokyo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
+}
+
+export function isEventVisible(event: EventItem, now = new Date()): boolean {
+  const today = tokyoDate(now);
+  if (event.startAt.slice(0, 10) !== today) return false;
+  const estimatedArrival = now.getTime() + event.kotakeMinutes * 60_000;
+  return event.endAt === null || new Date(event.endAt).getTime() > estimatedArrival;
+}
+
+export function sortEvents(events: EventItem[], sortKey: SortKey): EventItem[] {
+  const copy = [...events];
+  copy.sort((a, b) => {
+    if (sortKey === "nearest") return a.kotakeMinutes - b.kotakeMinutes;
+    if (sortKey === "start") return new Date(a.startAt).getTime() - new Date(b.startAt).getTime();
+    if (sortKey === "price") {
+      const aPrice = a.minPriceYen ?? Number.MAX_SAFE_INTEGER;
+      const bPrice = b.minPriceYen ?? Number.MAX_SAFE_INTEGER;
+      return aPrice - bPrice || b.recommendationScore - a.recommendationScore;
+    }
+    return b.recommendationScore - a.recommendationScore || a.kotakeMinutes - b.kotakeMinutes;
+  });
+  return copy;
+}
+
+function primaryTag(event: EventItem): string {
+  return primaryTags.find((tag) => event.tags.includes(tag)) ?? event.tags[0] ?? "その他";
+}
+
+export function selectRecommendations(events: EventItem[], limit = 5): EventItem[] {
+  const ranked = sortEvents(events, "recommended");
+  const selected: EventItem[] = [];
+  const tagCounts = new Map<string, number>();
+
+  for (const event of ranked) {
+    const tag = primaryTag(event);
+    if ((tagCounts.get(tag) ?? 0) >= 2) continue;
+    selected.push(event);
+    tagCounts.set(tag, (tagCounts.get(tag) ?? 0) + 1);
+    if (selected.length === limit) return selected;
+  }
+
+  for (const event of ranked) {
+    if (!selected.some((item) => item.id === event.id)) selected.push(event);
+    if (selected.length === limit) break;
+  }
+  return selected;
+}
+
+export function formatTimeRange(event: EventItem): string {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(event.startAt)) return "終日・開催時間は公式で確認";
+  const formatter = new Intl.DateTimeFormat("ja-JP", {
+    timeZone: "Asia/Tokyo",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  const start = formatter.format(new Date(event.startAt));
+  return event.endAt === null ? `${start}〜終了時刻は公式で確認` : `${start}–${formatter.format(new Date(event.endAt))}`;
+}
+
+export function timingLabel(event: EventItem, now = new Date()): string {
+  const start = /^\d{4}-\d{2}-\d{2}$/.test(event.startAt)
+    ? new Date(`${event.startAt}T00:00:00+09:00`).getTime()
+    : new Date(event.startAt).getTime();
+  const end = event.endAt === null ? Number.POSITIVE_INFINITY : new Date(event.endAt).getTime();
+  const current = now.getTime();
+  if (current >= start && current < end) return "開催中";
+  const minutes = Math.max(0, Math.round((start - current) / 60_000));
+  if (minutes < 60) return `あと約${minutes}分`;
+  return "これから";
+}
+
+export function availabilityLabel(event: EventItem): string {
+  if (event.availability === "walk_in") return "予約なしで参加しやすい";
+  if (event.availability === "same_day_ticket") return "当日券あり";
+  if (event.availability === "registration_open") return "当日申込を確認";
+  return "参加条件を公式で確認";
+}
