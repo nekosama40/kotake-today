@@ -210,7 +210,7 @@ function App() {
         <section className="all-events section-shell">
           <div className="section-heading">
             <div><span className="section-number">01</span><h2>{showEnded ? "今日のイベント" : "これから行けるイベント"}</h2></div>
-            <p>終了分は「終了も表示」で確認できます。</p>
+            <p>終了分は「終了」で確認できます。</p>
           </div>
 
           <div className="controls">
@@ -226,7 +226,7 @@ function App() {
             </label>
             <label className="toggle"><input type="checkbox" checked={freeOnly} onChange={(event) => setFreeOnly(event.target.checked)} /><span>無料のみ</span></label>
             <label className="toggle"><input type="checkbox" checked={walkInOnly} onChange={(event) => setWalkInOnly(event.target.checked)} /><span>予約不要</span></label>
-            <label className="toggle"><input type="checkbox" checked={showEnded} onChange={(event) => setShowEnded(event.target.checked)} /><span>終了も表示</span></label>
+            <label className="toggle"><input type="checkbox" checked={showEnded} onChange={(event) => setShowEnded(event.target.checked)} /><span>終了</span></label>
           </div>
 
           <div className="tag-filter" role="list" aria-label="ジャンルで絞り込む">
