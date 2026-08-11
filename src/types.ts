@@ -1,6 +1,12 @@
 export type Confidence = "high" | "medium" | "low";
 export type Availability = "walk_in" | "same_day_ticket" | "registration_open" | "unknown";
 export type Reservation = "not_required" | "recommended" | "required" | "unknown";
+export type DiscoverySourceType = "social" | "directory" | "official" | "venue" | "ticket" | "other";
+
+export interface DiscoverySource {
+  type: DiscoverySourceType;
+  url: string;
+}
 
 export interface EventImage {
   url: string | null;
@@ -19,6 +25,7 @@ export interface EventItem {
   ward: string;
   nearestStation: string;
   kotakeMinutes: number;
+  transferCount?: number;
   priceLabel: string;
   minPriceYen: number | null;
   isFree: boolean;
@@ -31,6 +38,9 @@ export interface EventItem {
   lastCheckedAt: string;
   image: EventImage;
   confidence: Confidence;
+  interestScore?: number;
+  uniquenessScore?: number;
+  discoveredVia?: DiscoverySource[];
   recommendationScore: number;
 }
 

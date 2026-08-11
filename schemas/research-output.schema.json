@@ -16,7 +16,8 @@
         "local-and-long-tail",
         "anime-character-and-food",
         "next-days-official-and-major",
-        "next-days-local-and-special"
+        "next-days-local-and-special",
+        "quality-and-gap"
       ]
     },
     "generatedAt": { "type": "string" },
@@ -56,6 +57,7 @@
         "ward": { "type": "string" },
         "nearestStation": { "type": "string" },
         "kotakeMinutes": { "type": "integer", "minimum": 1, "maximum": 60 },
+        "transferCount": { "type": "integer", "minimum": 0, "maximum": 1 },
         "priceLabel": { "type": "string" },
         "minPriceYen": { "type": ["integer", "null"], "minimum": 0 },
         "isFree": { "type": "boolean" },
@@ -89,13 +91,30 @@
           "additionalProperties": false
         },
         "confidence": { "type": "string", "enum": ["high", "medium", "low"] },
+        "interestScore": { "type": "integer", "minimum": 0, "maximum": 5 },
+        "uniquenessScore": { "type": "integer", "minimum": 0, "maximum": 5 },
+        "discoveredVia": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "items": {
+            "type": "object",
+            "properties": {
+              "type": { "type": "string", "enum": ["social", "directory", "official", "venue", "ticket", "other"] },
+              "url": { "type": "string" }
+            },
+            "required": ["type", "url"],
+            "additionalProperties": false
+          }
+        },
         "recommendationScore": { "type": "integer", "minimum": 0, "maximum": 100 }
       },
       "required": [
         "id", "title", "summary", "startAt", "endAt", "venueName", "ward",
-        "nearestStation", "kotakeMinutes", "priceLabel", "minPriceYen", "isFree",
+        "nearestStation", "kotakeMinutes", "transferCount", "priceLabel", "minPriceYen", "isFree",
         "availability", "reservation", "sameDayNote", "tags", "sourceLabel",
-        "sourceUrl", "lastCheckedAt", "image", "confidence", "recommendationScore"
+        "sourceUrl", "lastCheckedAt", "image", "confidence", "interestScore",
+        "uniquenessScore", "discoveredVia", "recommendationScore"
       ],
       "additionalProperties": false
     }

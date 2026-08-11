@@ -7,6 +7,7 @@ const passConfigs = new Map([
   ["anime-character-and-food", { dateCount: 1, searchMin: 16, searchMax: 24, breakdown: "anime-food" }],
   ["next-days-official-and-major", { dateCount: 2, searchMin: 12, searchMax: 18, breakdown: null }],
   ["next-days-local-and-special", { dateCount: 2, searchMin: 16, searchMax: 24, breakdown: "social-next" }],
+  ["quality-and-gap", { dateCount: 3, searchMin: 12, searchMax: 20, breakdown: null }],
 ]);
 
 if (!templatePath || !passName || !outputPath) {

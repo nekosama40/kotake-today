@@ -8,6 +8,8 @@ import {
   genreFilters,
   isEventOnDate,
   isEventVisible,
+  recommendationReasons,
+  selectRecommendations,
   sortEvents,
   timingLabel,
   tokyoDate,
@@ -93,14 +95,31 @@ function EventVisual({ event, featured = false }: { event: EventItem; featured?:
 function EventCard({ event, featured = false }: { event: EventItem; featured?: boolean }) {
   const now = new Date();
   const timing = timingLabel(event, now);
+  const [shared, setShared] = useState(false);
+
+  const shareEvent = async () => {
+    const shareUrl = new URL(window.location.href);
+    shareUrl.search = "";
+    shareUrl.searchParams.set("date", event.startAt.slice(0, 10));
+    shareUrl.searchParams.set("event", event.id);
+    const shareData = { title: event.title, text: `${formatEventDate(event)} ${formatTimeRange(event)}｜${event.venueName}`, url: shareUrl.href };
+    try {
+      if (navigator.share) await navigator.share(shareData);
+      else await navigator.clipboard.writeText(shareUrl.href);
+      setShared(true);
+      window.setTimeout(() => setShared(false), 1800);
+    } catch (error) {
+      if ((error as DOMException).name !== "AbortError") setShared(false);
+    }
+  };
+
   return (
-    <article className={`event-card ${featured ? "featured-card" : ""}`}>
+    <article id={event.id} className={`event-card ${featured ? "featured-card" : ""}`}>
       <a
         className="event-card-link"
         href={event.sourceUrl}
         target="_blank"
         rel="noreferrer"
-        aria-label={`${event.title}の公式ページを開く`}
       >
         <EventVisual event={event} featured={featured} />
         <div className="event-card-body">
@@ -121,11 +140,31 @@ function EventCard({ event, featured = false }: { event: EventItem; featured?: b
           </div>
           <p className="availability">{availabilityLabel(event)}　{event.sameDayNote}</p>
           <div className="tag-row">
-            {event.tags.slice(0, 4).map((tag) => <span key={tag}>#{tag}</span>)}
+            {event.tags.map((tag) => <span key={tag}>#{tag}</span>)}
           </div>
+          <span className="official-link-note" aria-hidden="true">公式・告知ページへ ↗</span>
         </div>
       </a>
+      <button type="button" className="share-button" onClick={shareEvent} aria-label={`${event.title}を共有`}>
+        {shared ? "コピー済み" : "共有"}
+      </button>
     </article>
+  );
+}
+
+function RecommendationCard({ event, now }: { event: EventItem; now: Date }) {
+  const reasons = recommendationReasons(event, now);
+  return (
+    <a className="recommendation-card" href={event.sourceUrl} target="_blank" rel="noreferrer">
+      <EventVisual event={event} />
+      <div>
+        <p>{formatEventDate(event)}　{formatTimeRange(event)}</p>
+        <h3>{event.title}</h3>
+        <div className="recommendation-reasons">
+          {reasons.map((reason) => <span key={reason}>{reason}</span>)}
+        </div>
+      </div>
+    </a>
   );
 }
 
@@ -138,13 +177,29 @@ function App() {
   const [freeOnly, setFreeOnly] = useState(false);
   const [walkInOnly, setWalkInOnly] = useState(false);
   const [showEnded, setShowEnded] = useState(false);
-  const [selectedDate, setSelectedDate] = useState(() => tokyoDate());
+  const [selectedDate, setSelectedDate] = useState(() => {
+    const requested = new URLSearchParams(window.location.search).get("date");
+    return requested && /^\d{4}-\d{2}-\d{2}$/.test(requested) ? requested : tokyoDate();
+  });
   const [clock, setClock] = useState(new Date());
+  const [visibleCount, setVisibleCount] = useState(12);
 
   useEffect(() => {
     const timer = window.setInterval(() => setClock(new Date()), 60_000);
     return () => window.clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    if (!payload) return;
+    const eventId = new URLSearchParams(window.location.search).get("event");
+    if (!eventId) return;
+    const linkedEvent = payload.events.find((event) => event.id === eventId);
+    if (linkedEvent) {
+      const linkedDate = linkedEvent.startAt.slice(0, 10);
+      setSelectedDate(linkedDate);
+      if (linkedDate === tokyoDate() && !isEventVisible(linkedEvent, new Date())) setShowEnded(true);
+    }
+  }, [payload]);
 
   useEffect(() => {
     fetch(`${import.meta.env.BASE_URL}data/events.json?ts=${Date.now()}`, { cache: "no-store" })
@@ -196,13 +251,36 @@ function App() {
       if (freeOnly && !event.isFree) return false;
       if (walkInOnly && event.reservation !== "not_required") return false;
       if (!needle) return true;
-      return [event.title, event.summary, event.venueName, event.ward, ...event.tags]
+      return [event.title, event.summary, event.venueName, event.ward, event.nearestStation, event.priceLabel, event.sameDayNote, event.sourceLabel, ...event.tags]
         .join(" ")
         .toLocaleLowerCase("ja")
         .includes(needle);
     });
-    return sortEvents(filtered, sortKey);
-  }, [visibleEvents, search, selectedGenre, freeOnly, walkInOnly, sortKey]);
+    return sortEvents(filtered, sortKey, clock);
+  }, [visibleEvents, search, selectedGenre, freeOnly, walkInOnly, sortKey, clock]);
+
+  const recommendations = useMemo(() => {
+    const pool = selectedIsToday
+      ? selectedDateEvents.filter((event) => isEventVisible(event, clock))
+      : selectedDateEvents;
+    return selectRecommendations(pool, 5, clock);
+  }, [selectedDateEvents, selectedIsToday, clock]);
+
+  useEffect(() => {
+    setVisibleCount(12);
+  }, [selectedDate, search, selectedGenre, freeOnly, walkInOnly, showEnded, sortKey]);
+
+  const displayedEvents = filteredEvents.slice(0, visibleCount);
+
+  useEffect(() => {
+    const eventId = new URLSearchParams(window.location.search).get("event");
+    if (!eventId) return;
+    const eventIndex = filteredEvents.findIndex((event) => event.id === eventId);
+    if (eventIndex < 0) return;
+    setVisibleCount((count) => Math.max(count, eventIndex + 1));
+    const timer = window.setTimeout(() => document.getElementById(eventId)?.scrollIntoView({ block: "center" }), 160);
+    return () => window.clearTimeout(timer);
+  }, [filteredEvents]);
 
   const formattedDate = new Intl.DateTimeFormat("ja-JP", {
     timeZone: "Asia/Tokyo",
@@ -267,10 +345,22 @@ function App() {
             ))}
           </nav>
 
+          {recommendations.length > 0 && (
+            <section className="recommendation-strip" aria-labelledby="recommendation-title">
+              <div className="recommendation-label">
+                <h2 id="recommendation-title">おすすめ</h2>
+                <p>参加しやすさ・時間・近さ・内容から選択</p>
+              </div>
+              <div className="recommendation-list">
+                {recommendations.map((event) => <RecommendationCard key={event.id} event={event} now={clock} />)}
+              </div>
+            </section>
+          )}
+
           <div className={`controls ${selectedIsToday ? "" : "without-ended"}`}>
             <label className="search-box">
-              <span>⌕</span>
-              <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="イベント名・会場・ジャンルで検索" />
+              <span aria-hidden="true">⌕</span>
+              <input aria-label="イベントを検索" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="イベント名・会場・ジャンルで検索" />
             </label>
             <label className="sort-box">
               <span>並び替え</span>
@@ -283,17 +373,24 @@ function App() {
             {selectedIsToday && <label className="toggle"><input type="checkbox" checked={showEnded} onChange={(event) => setShowEnded(event.target.checked)} /><span>終了</span></label>}
           </div>
 
-          <div className="tag-filter" role="list" aria-label="ジャンルで絞り込む">
-            <button className={selectedGenre === "all" ? "active" : ""} onClick={() => setSelectedGenre("all")}>すべて</button>
+          <div className="tag-filter" aria-label="ジャンルで絞り込む">
+            <button type="button" aria-pressed={selectedGenre === "all"} className={selectedGenre === "all" ? "active" : ""} onClick={() => setSelectedGenre("all")}>すべて</button>
             {availableGenres.map((genre) => (
-              <button key={genre.value} className={selectedGenre === genre.value ? "active" : ""} onClick={() => setSelectedGenre(genre.value)}>{genre.label}</button>
+              <button type="button" aria-pressed={selectedGenre === genre.value} key={genre.value} className={selectedGenre === genre.value ? "active" : ""} onClick={() => setSelectedGenre(genre.value)}>{genre.label}</button>
             ))}
           </div>
 
           {filteredEvents.length > 0 ? (
-            <div className="event-grid">
-              {filteredEvents.map((event) => <EventCard key={event.id} event={event} />)}
-            </div>
+            <>
+              <div className="event-grid">
+                {displayedEvents.map((event) => <EventCard key={event.id} event={event} />)}
+              </div>
+              {visibleCount < filteredEvents.length && (
+                <button type="button" className="load-more" onClick={() => setVisibleCount((count) => count + 12)}>
+                  もっと見る
+                </button>
+              )}
+            </>
           ) : (
             <div className="empty-state"><span>○</span><p>この条件に合う{selectedRelativeLabel}のイベントは見つかりませんでした。</p></div>
           )}

@@ -21,7 +21,7 @@ if (keep.size === 0) {
 }
 
 await fs.mkdir(eventImageDir, { recursive: true });
-const generatedName = /^event-[a-f0-9]{10}\.(?:jpg|png|webp|gif|avif)$/;
+const generatedName = /^(?:event-[a-f0-9]{10}|image-[a-f0-9]{16})\.(?:jpg|png|webp|gif|avif)$/;
 const stale = (await fs.readdir(eventImageDir))
   .filter((fileName) => generatedName.test(fileName) && !keep.has(fileName));
 await Promise.all(stale.map((fileName) => fs.unlink(path.join(eventImageDir, fileName))));

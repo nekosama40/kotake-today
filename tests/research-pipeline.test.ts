@@ -9,6 +9,8 @@ const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "
 const mergeScript = path.join(projectRoot, "scripts", "merge-events.mjs");
 const prepareSchemaScript = path.join(projectRoot, "scripts", "prepare-research-schema.mjs");
 const prepareSocialBriefScript = path.join(projectRoot, "scripts", "prepare-social-brief.mjs");
+const prepareMonthlyDraftBriefScript = path.join(projectRoot, "scripts", "prepare-monthly-draft-brief.mjs");
+const analyzeResearchGapsScript = path.join(projectRoot, "scripts", "analyze-research-gaps.mjs");
 const schemaTemplate = path.join(projectRoot, "schemas", "research-output.schema.json");
 const researchSourcesConfig = path.join(projectRoot, "config", "research-sources.json");
 const targetDate = "2099-01-01";
@@ -36,6 +38,7 @@ function eventFor(date: string, title: string) {
     ward: "豊島区",
     nearestStation: "池袋駅",
     kotakeMinutes: 20,
+    transferCount: 0,
     priceLabel: "無料",
     minPriceYen: 0,
     isFree: true,
@@ -48,6 +51,9 @@ function eventFor(date: string, title: string) {
     lastCheckedAt: `${date}T06:00:00+09:00`,
     image: { url: null, alt: `${title}の画像`, attribution: null, sourceUrl: null },
     confidence: "high",
+    interestScore: 4,
+    uniquenessScore: 3,
+    discoveredVia: [{ type: "official", url: `https://example.com/${date}` }],
     recommendationScore: 80,
   };
 }
@@ -135,6 +141,8 @@ describe("research pipeline", () => {
       const dedicatedSchema = JSON.parse(await readFile(dedicated.outputPath, "utf8"));
       expect(standardSchema.properties.passName.enum).toEqual(["official-and-major"]);
       expect(standardSchema.properties.searchBreakdown).toEqual({ type: "null" });
+      expect(standardSchema.$defs.event.required).toContain("transferCount");
+      expect(standardSchema.$defs.event.required).toContain("discoveredVia");
       expect(dedicatedSchema.properties.passName.enum).toEqual(["anime-character-and-food"]);
       expect(dedicatedSchema.properties.searchBreakdown.type).toBe("object");
       const socialSchema = JSON.parse(await readFile(social.outputPath, "utf8"));
@@ -218,6 +226,44 @@ describe("research pipeline", () => {
     }
   });
 
+  it("collapses venue-label variants without merging generic events at different venues", async () => {
+    const venueVariantA = { ...eventFor(targetDate, "サンプル特別展示"), venueName: "東京会場 本館" };
+    const venueVariantB = {
+      ...eventFor(targetDate, "サンプル特別展示"),
+      venueName: "東京会場",
+      sourceUrl: "https://different.example/same-exhibition",
+    };
+    const genericA = { ...eventFor(targetDate, "おはなし会"), venueName: "図書館A" };
+    const genericB = {
+      ...eventFor(targetDate, "おはなし会"),
+      venueName: "図書館B",
+      sourceUrl: "https://different.example/story-time",
+    };
+    const sessionA = { ...eventFor(targetDate, "時間別体験会"), venueName: "体験会場" };
+    const sessionB = {
+      ...eventFor(targetDate, "時間別体験会"),
+      venueName: "体験会場",
+      startAt: `${targetDate}T14:00:00+09:00`,
+      endAt: `${targetDate}T16:00:00+09:00`,
+    };
+    const highConfidence = { ...eventFor(targetDate, "信頼度優先展示"), confidence: "high", recommendationScore: 20 };
+    const lowConfidence = { ...eventFor(targetDate, "信頼度優先展示"), confidence: "low", recommendationScore: 100 };
+    const execution = await runMerge([
+      legacyResearchPass("official-and-major"),
+      { ...legacyResearchPass("local-and-long-tail"), events: [venueVariantA, venueVariantB, genericA, genericB, sessionA, sessionB, highConfidence, lowConfidence] },
+    ]);
+    try {
+      expect(execution.result.status, execution.result.stderr).toBe(0);
+      const output = JSON.parse(await readFile(execution.outputPath, "utf8"));
+      expect(output.events.filter((event: { title: string }) => event.title === "サンプル特別展示")).toHaveLength(1);
+      expect(output.events.filter((event: { title: string }) => event.title === "おはなし会")).toHaveLength(2);
+      expect(output.events.filter((event: { title: string }) => event.title === "時間別体験会")).toHaveLength(2);
+      expect(output.events.find((event: { title: string }) => event.title === "信頼度優先展示").confidence).toBe("high");
+    } finally {
+      await rm(execution.tempDir, { recursive: true, force: true });
+    }
+  });
+
   it("requires a measured social-search breakdown in a five-pass run", async () => {
     const existingOutput = "preserve-five-pass-output\n";
     const invalidSocialPass = researchPass("local-and-long-tail", null);
@@ -252,6 +298,106 @@ describe("research pipeline", () => {
     }
   });
 
+  it("reuses the newest matching Luna monthly draft without importing Sol or published duplicates", async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "kotake-monthly-draft-"));
+    const outputPath = path.join(tempDir, "monthly-brief.json");
+    const themedOutputPath = path.join(tempDir, "monthly-themed-brief.json");
+    const priorPath = path.join(tempDir, "prior.json");
+    const publishedEvent = eventFor(targetDate, "公開済み候補");
+    const bleachPublishedEvent = {
+      ...eventFor(targetDate, "TVアニメ『BLEACH 千年血戦篇‐禍進譚-』特別展示"),
+      sourceUrl: "https://example.com/bleach-exhibition",
+    };
+    const officialCandidate = { ...eventFor(targetDate, "新しい公式候補"), researchPass: "monthly-official-major" };
+    const similarPublishedCandidate = {
+      ...eventFor(targetDate, "TVアニメ 公開済み候補"),
+      sourceUrl: publishedEvent.sourceUrl,
+      researchPass: "monthly-official-major",
+    };
+    const bleachTitleVariant = {
+      ...eventFor(targetDate, "BLEACH 千年血戦篇 特別展示"),
+      sourceUrl: bleachPublishedEvent.sourceUrl,
+      researchPass: "monthly-official-major",
+    };
+    const calendarSibling = {
+      ...eventFor(targetDate, "同じ告知ページの別イベント"),
+      sourceUrl: publishedEvent.sourceUrl,
+      researchPass: "monthly-official-major",
+    };
+    const socialCandidate = { ...eventFor(targetDate, "SNS担当候補"), researchPass: "monthly-social-local" };
+    const animeCandidate = { ...eventFor(targetDate, "アニメ候補"), researchPass: "monthly-anime-character" };
+    const foodCandidate = { ...eventFor(targetDate, "食べ物候補"), researchPass: "monthly-food" };
+    const solOnlyCandidate = { ...eventFor(targetDate, "Solだけの候補"), researchPass: "monthly-official-major" };
+    const baseDraft = {
+      generatedFor: "2098-12-15",
+      coveredDates: [targetDate],
+      events: [],
+    };
+
+    await Promise.all([
+      writeFile(path.join(tempDir, "monthly-research-2098-12-01-to-2099-01-31.json"), JSON.stringify({
+        ...baseDraft,
+        generatedAt: "2098-12-01T00:00:00Z",
+        events: [{ ...eventFor(targetDate, "古い候補"), researchPass: "monthly-official-major" }],
+      }), "utf8"),
+      writeFile(path.join(tempDir, "monthly-research-2098-12-15-to-2099-02-15.json"), JSON.stringify({
+        ...baseDraft,
+        generatedAt: "2098-12-15T00:00:00Z",
+        events: [
+          { ...publishedEvent, researchPass: "monthly-official-major" },
+          similarPublishedCandidate,
+          bleachTitleVariant,
+          officialCandidate,
+          calendarSibling,
+          socialCandidate,
+          animeCandidate,
+          foodCandidate,
+        ],
+      }), "utf8"),
+      writeFile(path.join(tempDir, "monthly-sol-research-2098-12-20-to-2099-02-20.json"), JSON.stringify({
+        ...baseDraft,
+        generatedAt: "2098-12-20T00:00:00Z",
+        events: [solOnlyCandidate],
+      }), "utf8"),
+      writeFile(priorPath, JSON.stringify({ events: [publishedEvent, bleachPublishedEvent] }), "utf8"),
+    ]);
+
+    const result = spawnSync(process.execPath, [
+      prepareMonthlyDraftBriefScript,
+      tempDir,
+      targetDate,
+      "official-and-major",
+      priorPath,
+      outputPath,
+    ], { cwd: projectRoot, encoding: "utf8" });
+    const themedResult = spawnSync(process.execPath, [
+      prepareMonthlyDraftBriefScript,
+      tempDir,
+      targetDate,
+      "anime-character-and-food",
+      priorPath,
+      themedOutputPath,
+    ], { cwd: projectRoot, encoding: "utf8" });
+
+    try {
+      expect(result.status, result.stderr).toBe(0);
+      expect(themedResult.status, themedResult.stderr).toBe(0);
+      const brief = JSON.parse(await readFile(outputPath, "utf8"));
+      const themedBrief = JSON.parse(await readFile(themedOutputPath, "utf8"));
+      expect(brief.draftFile).toBe("monthly-research-2098-12-15-to-2099-02-15.json");
+      expect(brief.candidates.map((candidate: { title: string }) => candidate.title)).toEqual([
+        "新しい公式候補",
+        "同じ告知ページの別イベント",
+      ]);
+      expect(themedBrief.candidates.map((candidate: { title: string }) => candidate.title)).toEqual([
+        "アニメ候補",
+        "食べ物候補",
+      ]);
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
   it("builds a marked social-account brief with daily and rotating sources", async () => {
     const tempDir = await mkdtemp(path.join(os.tmpdir(), "kotake-social-brief-"));
     const outputPath = path.join(tempDir, "social-brief.md");
@@ -275,22 +421,63 @@ describe("research pipeline", () => {
     }
   });
 
+  it("requests a gap pass from unique-event coverage rather than duplicate raw rows", async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "kotake-gap-analysis-"));
+    const passAPath = path.join(tempDir, "pass-a.json");
+    const passBPath = path.join(tempDir, "pass-b.json");
+    const outputPath = path.join(tempDir, "gap.json");
+    const duplicate = eventFor(targetDate, "同じ展示");
+    await Promise.all([
+      writeFile(passAPath, JSON.stringify({ generatedFor: targetDate, targetDates: [targetDate], events: [duplicate] }), "utf8"),
+      writeFile(passBPath, JSON.stringify({ generatedFor: targetDate, targetDates: [targetDate], events: [duplicate] }), "utf8"),
+    ]);
+    const result = spawnSync(process.execPath, [analyzeResearchGapsScript, passAPath, passBPath, outputPath], {
+      cwd: projectRoot,
+      encoding: "utf8",
+    });
+    try {
+      expect(result.status, result.stderr).toBe(0);
+      const analysis = JSON.parse(await readFile(outputPath, "utf8"));
+      expect(analysis.countsByDate[targetDate]).toBe(1);
+      expect(analysis.shouldRunGapPass).toBe(true);
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
   it("keeps five jobs, the efficient next-days passes, and the before-seven schedule configured", async () => {
     const generationScript = await readFile(path.join(projectRoot, "scripts", "generate-events.ps1"), "utf8");
     const researchScript = await readFile(path.join(projectRoot, "scripts", "research-pass.ps1"), "utf8");
+    const researchRunner = await readFile(path.join(projectRoot, "scripts", "run-codex-research.mjs"), "utf8");
+    const researchPrompt = await readFile(path.join(projectRoot, "prompts", "daily-update.md"), "utf8");
     const taskScript = await readFile(path.join(projectRoot, "scripts", "register-scheduled-tasks.ps1"), "utf8");
-    expect(generationScript.match(/Start-Job -Name/g)).toHaveLength(5);
+    expect(generationScript.match(/Start-Job -Name/g)).toHaveLength(6);
+    expect(generationScript).toContain("five complete standard passes");
+    expect(generationScript).toContain("gapDeadline");
     expect(generationScript).toContain("'anime-character-and-food'");
     expect(generationScript).toContain("'next-days-official-and-major'");
     expect(generationScript).toContain("'next-days-local-and-special'");
     expect(generationScript).toContain("Spend 8 to 12 distinct searches on each side");
+    expect(generationScript).toContain("analyze-research-gaps.mjs");
+    expect(generationScript).toContain("quality-and-gap");
     expect(researchScript).toContain("prepare-research-schema.mjs");
     expect(researchScript).toContain("prepare-social-brief.mjs");
+    expect(researchScript).toContain("prepare-monthly-draft-brief.mjs");
+    expect(researchScript).toContain("prepare-prior-brief.mjs");
+    expect(researchScript).toContain("run-codex-research.mjs");
+    expect(researchRunner).toContain("gpt-5.6-luna");
+    expect(researchRunner).toContain('model_reasoning_effort="max"');
+    expect(researchRunner).toContain('"--json"');
     expect(researchScript).toContain("watchlistChecks");
     expect(researchScript).toContain("$ErrorActionPreference = 'Continue'");
     expect(researchScript).toContain("$codexExitCode = $LASTEXITCODE");
-    expect(researchScript).toContain("'--output-schema', $passSchemaFile");
-    expect(taskScript).toContain("-At '04:30'");
+    expect(researchRunner).toContain('"--output-schema"');
+    expect(researchPrompt).toContain("{{MONTHLY_DRAFT_CANDIDATES}}");
+    expect(researchPrompt).toContain("今回あらためて `sourceUrl` を開き");
+    expect(researchPrompt).toContain("公式告知を確認できない月間候補");
+    expect(researchPrompt).toContain("`transferCount`");
+    expect(researchPrompt).toContain("`discoveredVia`");
+    expect(taskScript).toContain("-At '03:45'");
     expect(taskScript).toContain("-At '06:25'");
     expect(taskScript).toContain("-At '06:35'");
   });

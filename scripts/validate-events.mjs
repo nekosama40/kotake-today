@@ -47,10 +47,17 @@ export function validatePayload(payload, expectedDate) {
     }
     if (!wards.has(event.ward)) errors.push(`${prefix}.ward is not a Tokyo special ward`);
     if (!Number.isInteger(event.kotakeMinutes) || event.kotakeMinutes < 1 || event.kotakeMinutes > 60) errors.push(`${prefix}.kotakeMinutes must be 1..60`);
+    if (event.transferCount !== undefined && (!Number.isInteger(event.transferCount) || event.transferCount < 0 || event.transferCount > 1)) errors.push(`${prefix}.transferCount must be 0..1`);
     if (!availability.has(event.availability)) errors.push(`${prefix}.availability is invalid`);
     if (!reservations.has(event.reservation)) errors.push(`${prefix}.reservation is invalid`);
     if (!confidence.has(event.confidence)) errors.push(`${prefix}.confidence is invalid`);
     if (!Number.isInteger(event.recommendationScore) || event.recommendationScore < 0 || event.recommendationScore > 100) errors.push(`${prefix}.recommendationScore must be 0..100`);
+    if (event.interestScore !== undefined && (!Number.isInteger(event.interestScore) || event.interestScore < 0 || event.interestScore > 5)) errors.push(`${prefix}.interestScore must be 0..5`);
+    if (event.uniquenessScore !== undefined && (!Number.isInteger(event.uniquenessScore) || event.uniquenessScore < 0 || event.uniquenessScore > 5)) errors.push(`${prefix}.uniquenessScore must be 0..5`);
+    if (event.discoveredVia !== undefined && (!Array.isArray(event.discoveredVia)
+      || event.discoveredVia.some((entry) => !entry || typeof entry.type !== "string" || !/^https:\/\//i.test(entry.url ?? "")))) {
+      errors.push(`${prefix}.discoveredVia must contain typed https sources`);
+    }
     if (!Array.isArray(event.tags) || event.tags.length === 0) errors.push(`${prefix}.tags must not be empty`);
     if (!/^https:\/\//i.test(event.sourceUrl ?? "")) errors.push(`${prefix}.sourceUrl must use https`);
     if (Number.isNaN(Date.parse(event.startAt)) || (event.endAt !== null && Number.isNaN(Date.parse(event.endAt)))) errors.push(`${prefix} has invalid times`);

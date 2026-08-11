@@ -14,6 +14,9 @@ $passBFile = Join-Path $workDir "research-$TargetDate-long-tail.json"
 $passCFile = Join-Path $workDir "research-$TargetDate-anime-food.json"
 $passDFile = Join-Path $workDir "research-$TargetDate-next-official.json"
 $passEFile = Join-Path $workDir "research-$TargetDate-next-local-special.json"
+$passFFile = Join-Path $workDir "research-$TargetDate-quality-gap.json"
+$gapAnalysisFile = Join-Path $workDir "research-$TargetDate-gap-analysis.json"
+$usageSummaryFile = Join-Path $workDir "research-usage-$TargetDate.json"
 $pendingFile = Join-Path $workDir "pending-$TargetDate.json"
 $publicFile = Join-Path $projectRoot 'public\data\events.json'
 $logFile = Join-Path $logDir "generate-$TargetDate.log"
@@ -22,12 +25,14 @@ $passBLog = Join-Path $logDir "research-$TargetDate-long-tail.log"
 $passCLog = Join-Path $logDir "research-$TargetDate-anime-food.log"
 $passDLog = Join-Path $logDir "research-$TargetDate-next-official.log"
 $passELog = Join-Path $logDir "research-$TargetDate-next-local-special.log"
+$passFLog = Join-Path $logDir "research-$TargetDate-quality-gap.log"
 $researchScript = if ($ResearchScriptPath) { $ResearchScriptPath } else { Join-Path $PSScriptRoot 'research-pass.ps1' }
 $baseDate = [DateTime]::ParseExact($TargetDate, 'yyyy-MM-dd', [Globalization.CultureInfo]::InvariantCulture)
 $nextDate = $baseDate.AddDays(1).ToString('yyyy-MM-dd')
 $followingDate = $baseDate.AddDays(2).ToString('yyyy-MM-dd')
 $todayDatesCsv = $TargetDate
 $nextDatesCsv = "$nextDate,$followingDate"
+$allDatesCsv = "$TargetDate,$nextDate,$followingDate"
 
 if (-not (Test-Path -LiteralPath $researchScript)) {
   throw "Research script does not exist: $researchScript"
@@ -53,7 +58,7 @@ try {
   $focusD = 'Research tomorrow and the following day together through official organizers, Tokyo wards, public facilities, museums, commercial venues, official franchise sites, ticket pages, and major event calendars. Reuse multi-day calendars efficiently, but create a separate event record for each target date. Recheck every relevant prior candidate before keeping it.'
   $focusE = 'Run the dedicated advance social discovery lane for tomorrow and the following day. Check marked event-curation accounts efficiently, then branch into public X and Instagram posts from organizers, venues, performers, vendors, stores, schools, libraries, shopping streets, live houses, game spaces, anime and character pop-ups, collaboration cafes, food events, markets, and unusual local plans. Search both dates together and recheck relevant prior candidates.'
 
-  foreach ($researchOutput in $passAFile, $passBFile, $passCFile, $passDFile, $passEFile) {
+  foreach ($researchOutput in $passAFile, $passBFile, $passCFile, $passDFile, $passEFile, $passFFile) {
     Remove-Item -LiteralPath $researchOutput -Force -ErrorAction SilentlyContinue
   }
   "[$((Get-Date).ToString('o'))] Starting five Luna max research passes in parallel for $TargetDate through $followingDate" | Set-Content -LiteralPath $logFile -Encoding utf8
@@ -86,7 +91,46 @@ try {
     throw 'All five research passes must finish before merge. Previous public data was preserved.'
   }
 
-  & node (Join-Path $PSScriptRoot 'merge-events.mjs') $passAFile $passBFile $passCFile $passDFile $passEFile $pendingFile $TargetDate $publicFile 2>&1 | Tee-Object -FilePath $logFile -Append
+  & node (Join-Path $PSScriptRoot 'analyze-research-gaps.mjs') $passAFile $passBFile $passCFile $passDFile $passEFile $gapAnalysisFile 2>&1 | Tee-Object -FilePath $logFile -Append
+  if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $gapAnalysisFile)) { throw 'Coverage analysis failed.' }
+  $gapAnalysis = Get-Content -LiteralPath $gapAnalysisFile -Raw -Encoding utf8 | ConvertFrom-Json
+  if ($gapAnalysis.shouldRunGapPass) {
+    $gapDeadline = $baseDate.Date.AddHours(5).AddMinutes(45)
+    $gapTimeoutSeconds = [math]::Min(2700, [math]::Floor(($gapDeadline - (Get-Date)).TotalSeconds))
+    if ($gapTimeoutSeconds -ge 300) {
+      $gapFocus = "Fill only these measured gaps after the five standard passes: $(@($gapAnalysis.gaps) -join '; '). Search all three dates together, prioritize missing genres and nearby wards, and avoid repeating candidates in the prior payload."
+      "[$((Get-Date).ToString('o'))] Starting conditional Luna max quality-and-gap pass with a hard deadline of $($gapDeadline.ToString('HH:mm'))" | Tee-Object -FilePath $logFile -Append
+      $gapJob = Start-Job -Name "kotake-quality-gap-$TargetDate" -FilePath $researchScript -ArgumentList $TargetDate, $allDatesCsv, 'quality-and-gap', $gapFocus, $passFFile, $passFLog, $gapAnalysisFile, $projectRoot
+      $jobs += $gapJob
+      $null = Wait-Job -Job $gapJob -Timeout $gapTimeoutSeconds
+      if ($gapJob.State -notin 'Completed', 'Failed', 'Stopped') {
+        Stop-Job -Job $gapJob
+        "[$((Get-Date).ToString('o'))] Conditional gap pass reached its deadline; publishing the five complete standard passes." | Tee-Object -FilePath $logFile -Append
+      }
+      else {
+        $savedGapErrorPreference = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        Receive-Job -Job $gapJob 2>&1 | Tee-Object -FilePath $logFile -Append
+        $ErrorActionPreference = $savedGapErrorPreference
+        if ($gapJob.State -eq 'Completed' -and (Test-Path -LiteralPath $passFFile)) {
+          $researchOutputs += $passFFile
+        }
+        else {
+          "[$((Get-Date).ToString('o'))] Conditional gap pass failed; publishing the five complete standard passes." | Tee-Object -FilePath $logFile -Append
+        }
+      }
+    }
+    else {
+      "[$((Get-Date).ToString('o'))] Coverage gaps were found too close to the publication deadline; gap pass skipped." | Tee-Object -FilePath $logFile -Append
+    }
+  }
+
+  $expectedTracePasses = @('official-and-major', 'local-and-long-tail', 'anime-character-and-food', 'next-days-official-and-major', 'next-days-local-and-special')
+  if ($researchOutputs.Count -eq 6) { $expectedTracePasses += 'quality-and-gap' }
+  & node (Join-Path $PSScriptRoot 'summarize-research-traces.mjs') $workDir $TargetDate $usageSummaryFile ($expectedTracePasses -join ',') 2>&1 | Tee-Object -FilePath $logFile -Append
+  if ($LASTEXITCODE -ne 0) { throw 'Research trace summary failed.' }
+
+  & node (Join-Path $PSScriptRoot 'merge-events.mjs') @researchOutputs $pendingFile $TargetDate $publicFile 2>&1 | Tee-Object -FilePath $logFile -Append
   if ($LASTEXITCODE -ne 0) { throw 'Merge failed.' }
   & node (Join-Path $PSScriptRoot 'validate-events.mjs') $pendingFile $TargetDate 2>&1 | Tee-Object -FilePath $logFile -Append
   if ($LASTEXITCODE -ne 0) { throw 'Validation failed.' }

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   eventMatchesGenre,
+  dynamicRecommendationScore,
   formatEventDate,
   formatPublishedAt,
   formatTimeRange,
@@ -60,6 +61,7 @@ describe("event helpers", () => {
   it("keeps events with an unknown official end time visible", () => {
     const unknownEnd = { ...base, endAt: null };
     expect(isEventVisible(unknownEnd, new Date("2026-08-07T12:00:00Z"))).toBe(true);
+    expect(isEventVisible(unknownEnd, new Date("2026-08-07T12:40:00Z"))).toBe(false);
     expect(formatTimeRange(unknownEnd)).toContain("終了時刻は公式で確認");
   });
 
@@ -82,11 +84,11 @@ describe("event helpers", () => {
   });
 
   it("groups detailed tags into broad filter genres", () => {
-    expect(eventMatchesGenre({ ...base, tags: ["現代美術", "夜間開館"] }, "art")).toBe(true);
-    expect(eventMatchesGenre({ ...base, tags: ["キャラクター", "コラボカフェ"] }, "anime-character")).toBe(true);
-    expect(eventMatchesGenre({ ...base, tags: ["ボードゲーム"] }, "game-tech")).toBe(true);
+    expect(eventMatchesGenre({ ...base, tags: ["現代美術", "夜間開館"] }, "culture")).toBe(true);
+    expect(eventMatchesGenre({ ...base, tags: ["キャラクター", "コラボカフェ"] }, "culture")).toBe(true);
+    expect(eventMatchesGenre({ ...base, tags: ["ボードゲーム"] }, "music-game")).toBe(true);
     expect(eventMatchesGenre({ ...base, tags: ["絵本", "おはなし会"] }, "family")).toBe(true);
-    expect(eventMatchesGenre(base, "music")).toBe(false);
+    expect(eventMatchesGenre(base, "food")).toBe(false);
   });
 
   it("sorts by travel time", () => {
@@ -96,11 +98,18 @@ describe("event helpers", () => {
 
   it("keeps recommendations diverse when possible", () => {
     const events = [
-      { ...base, id: "a", recommendationScore: 100 },
-      { ...base, id: "b", recommendationScore: 99 },
-      { ...base, id: "c", recommendationScore: 98 },
-      { ...base, id: "d", tags: ["音楽"], recommendationScore: 70 },
+      { ...base, id: "a", venueName: "会場A", sourceUrl: "https://a.example/event", recommendationScore: 100 },
+      { ...base, id: "b", venueName: "会場B", sourceUrl: "https://b.example/event", recommendationScore: 99 },
+      { ...base, id: "c", venueName: "会場C", sourceUrl: "https://c.example/event", recommendationScore: 98 },
+      { ...base, id: "d", venueName: "会場D", sourceUrl: "https://d.example/event", tags: ["音楽"], recommendationScore: 70 },
     ];
     expect(selectRecommendations(events, 3).map((event) => event.id)).toEqual(["a", "b", "d"]);
+  });
+
+  it("raises an event that still has useful time left after arrival", () => {
+    const now = new Date("2026-08-07T08:00:00Z");
+    const useful = { ...base, endAt: "2026-08-07T20:00:00+09:00" };
+    const nearlyOver = { ...base, endAt: "2026-08-07T18:30:00+09:00" };
+    expect(dynamicRecommendationScore(useful, now)).toBeGreaterThan(dynamicRecommendationScore(nearlyOver, now));
   });
 });

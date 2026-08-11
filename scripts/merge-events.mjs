@@ -31,6 +31,7 @@ function addIsoDays(value, days) {
 
 const todayPasses = new Set(["official-and-major", "local-and-long-tail", "anime-character-and-food"]);
 const advancePasses = new Set(["next-days-official-and-major", "next-days-local-and-special"]);
+const gapPasses = new Set(["quality-and-gap"]);
 const socialPasses = new Set(["local-and-long-tail", "next-days-local-and-special"]);
 const passRules = new Map([
   ["official-and-major", { searchMin: 16, searchMax: 24 }],
@@ -38,10 +39,12 @@ const passRules = new Map([
   ["anime-character-and-food", { searchMin: 16, searchMax: 24 }],
   ["next-days-official-and-major", { searchMin: 12, searchMax: 18 }],
   ["next-days-local-and-special", { searchMin: 16, searchMax: 24 }],
+  ["quality-and-gap", { searchMin: 12, searchMax: 20 }],
 ]);
 const expectedTodayDates = [targetDate];
 const expectedAdvanceDates = [addIsoDays(targetDate, 1), addIsoDays(targetDate, 2)];
 const expectedFivePasses = new Set([...todayPasses, ...advancePasses]);
+const expectedSixPasses = new Set([...expectedFivePasses, ...gapPasses]);
 
 const researchPasses = await Promise.all(passPaths.map((passPath) => fs.readFile(passPath, "utf8").then(JSON.parse)));
 
@@ -54,13 +57,19 @@ if (researchPasses.length === 5
   && (passNames.size !== expectedFivePasses.size || [...expectedFivePasses].some((passName) => !passNames.has(passName)))) {
   throw new Error("A five-pass run must contain the three today passes and both next-days passes.");
 }
+if (researchPasses.length === 6
+  && (passNames.size !== expectedSixPasses.size || [...expectedSixPasses].some((passName) => !passNames.has(passName)))) {
+  throw new Error("A six-pass run must contain the five standard passes and the quality-and-gap pass.");
+}
 for (const researchPass of researchPasses) {
   const isTodayPass = todayPasses.has(researchPass.passName);
   const isAdvancePass = advancePasses.has(researchPass.passName);
-  if (!isTodayPass && !isAdvancePass) throw new Error(`Unsupported research pass: ${researchPass.passName}`);
+  const isGapPass = gapPasses.has(researchPass.passName);
+  if (!isTodayPass && !isAdvancePass && !isGapPass) throw new Error(`Unsupported research pass: ${researchPass.passName}`);
 
   const targetDates = researchPass.targetDates ?? [researchPass.generatedFor];
-  const expectedDates = isAdvancePass ? expectedAdvanceDates : expectedTodayDates;
+  const expectedDates = isGapPass ? [...expectedTodayDates, ...expectedAdvanceDates]
+    : isAdvancePass ? expectedAdvanceDates : expectedTodayDates;
   if (JSON.stringify(targetDates) !== JSON.stringify(expectedDates)) {
     throw new Error(`Research pass ${researchPass.passName} has invalid targetDates.`);
   }
@@ -109,11 +118,44 @@ for (const researchPass of researchPasses) {
 }
 
 function normalize(value) {
-  return value.normalize("NFKC").toLowerCase().replace(/[\s\p{P}\p{S}]/gu, "");
+  return String(value ?? "").normalize("NFKC").toLowerCase().replace(/[\s\p{P}\p{S}]/gu, "");
 }
 
-function dedupeKey(event) {
-  return `${normalize(event.title)}:${normalize(event.venueName)}:${event.startAt.slice(0, 10)}`;
+function canonicalUrl(value) {
+  try {
+    const url = new URL(value);
+    url.hash = "";
+    for (const key of [...url.searchParams.keys()]) {
+      if (/^(?:utm_|fbclid|gclid|stt_lang)/i.test(key)) url.searchParams.delete(key);
+    }
+    url.pathname = url.pathname.replace(/\/$/, "");
+    return url.href;
+  } catch {
+    return String(value ?? "");
+  }
+}
+
+function likelyDuplicate(left, right) {
+  const leftTitle = normalize(left.title);
+  const rightTitle = normalize(right.title);
+  if (!leftTitle || !rightTitle || left.startAt.slice(0, 10) !== right.startAt.slice(0, 10)) return false;
+  const exactTitle = leftTitle === rightTitle;
+  const shorter = leftTitle.length <= rightTitle.length ? leftTitle : rightTitle;
+  const longer = leftTitle.length > rightTitle.length ? leftTitle : rightTitle;
+  const compatibleTitle = exactTitle || (shorter.length >= 8 && longer.includes(shorter));
+  if (!compatibleTitle) return false;
+  const sameSource = canonicalUrl(left.sourceUrl) === canonicalUrl(right.sourceUrl);
+  const leftVenue = normalize(left.venueName);
+  const rightVenue = normalize(right.venueName);
+  const compatibleVenue = leftVenue === rightVenue
+    || (Math.min(leftVenue.length, rightVenue.length) >= 4 && (leftVenue.includes(rightVenue) || rightVenue.includes(leftVenue)));
+  const sameArea = left.ward === right.ward || normalize(left.nearestStation) === normalize(right.nearestStation);
+  const sameStart = left.startAt === right.startAt;
+  const bothAllDay = /^\d{4}-\d{2}-\d{2}$/.test(left.startAt) && /^\d{4}-\d{2}-\d{2}$/.test(right.startAt);
+  const timeCompatible = sameStart || bothAllDay;
+  return exactTitle
+    ? timeCompatible && (sameSource || compatibleVenue || (leftTitle.length >= 8 && sameArea))
+    : timeCompatible && sameSource;
 }
 
 function confidenceWeight(value) {
@@ -121,20 +163,23 @@ function confidenceWeight(value) {
 }
 
 function recomputeScore(event) {
-  let score = Math.min(70, Math.max(0, event.recommendationScore));
-  if (event.availability === "walk_in") score += 12;
-  if (event.availability === "same_day_ticket") score += 7;
-  if (event.reservation === "not_required") score += 8;
-  if (event.kotakeMinutes <= 30) score += 8;
-  else if (event.kotakeMinutes <= 45) score += 5;
-  else score += 2;
-  if (event.confidence === "high") score += 6;
-  if (event.image?.url) score += 2;
-  return Math.min(100, score);
+  const legacy = Math.max(0, Math.min(100, Number(event.recommendationScore ?? 50)));
+  const interest = Number.isInteger(event.interestScore) ? event.interestScore : Math.round(legacy / 20);
+  const uniqueness = Number.isInteger(event.uniquenessScore) ? event.uniquenessScore : Math.round(legacy / 25);
+  const contentScore = Math.min(15, Math.max(0, interest * 3)) + Math.min(10, Math.max(0, uniqueness * 2));
+  const availabilityScore = event.availability === "walk_in" ? 20
+    : event.availability === "same_day_ticket" ? 15
+      : event.availability === "registration_open" ? 10 : 0;
+  const reservationScore = event.reservation === "not_required" ? 10
+    : event.reservation === "recommended" ? 5 : 0;
+  const proximityScore = Math.max(0, Math.round(12 * (61 - event.kotakeMinutes) / 60));
+  const confidenceScore = event.confidence === "high" ? 8 : event.confidence === "medium" ? 4 : 0;
+  return Math.min(75, contentScore + availabilityScore + reservationScore + proximityScore + confidenceScore);
 }
 
 function stableId(event) {
-  const digest = crypto.createHash("sha1").update(dedupeKey(event)).digest("hex").slice(0, 10);
+  const key = `${canonicalUrl(event.sourceUrl)}:${event.startAt}:${normalize(event.title)}`;
+  const digest = crypto.createHash("sha1").update(key).digest("hex").slice(0, 10);
   return `event-${digest}`;
 }
 
@@ -191,13 +236,19 @@ async function cacheEventImage(event) {
     if (bytes.byteLength === 0 || bytes.byteLength > 8_000_000) throw new Error("image size is outside limits");
 
     await fs.mkdir(eventImageDir, { recursive: true });
-    const fileName = `${stableId(event)}.webp`;
     const optimized = await sharp(bytes, { animated: false })
       .rotate()
       .resize({ width: 1000, withoutEnlargement: true })
       .webp({ quality: 78, effort: 4 })
       .toBuffer();
-    await fs.writeFile(path.join(eventImageDir, fileName), optimized);
+    const contentDigest = crypto.createHash("sha256").update(optimized).digest("hex").slice(0, 16);
+    const fileName = `image-${contentDigest}.webp`;
+    const imagePath = path.join(eventImageDir, fileName);
+    try {
+      await fs.access(imagePath);
+    } catch {
+      await fs.writeFile(imagePath, optimized);
+    }
     return {
       ...event,
       image: {
@@ -215,7 +266,7 @@ async function cacheEventImage(event) {
   }
 }
 
-const deduped = new Map();
+const deduped = [];
 
 function addResearchEvent(rawEvent) {
   const event = {
@@ -226,12 +277,27 @@ function addResearchEvent(rawEvent) {
   };
   if (!tokyoWards.has(event.ward)) return;
   if (event.kotakeMinutes > 60) return;
-  const key = dedupeKey(event);
-  const current = deduped.get(key);
-  if (!current || confidenceWeight(event.confidence) > confidenceWeight(current.confidence) || event.recommendationScore > current.recommendationScore) {
-    deduped.set(key, event);
+  if (Number.isInteger(event.transferCount) && event.transferCount > 1) return;
+  const existingIndex = deduped.findIndex((candidate) => likelyDuplicate(candidate, event));
+  const current = existingIndex >= 0 ? deduped[existingIndex] : null;
+  const shouldReplace = !current
+    || confidenceWeight(event.confidence) > confidenceWeight(current.confidence)
+    || (confidenceWeight(event.confidence) === confidenceWeight(current.confidence) && recomputeScore(event) > recomputeScore(current));
+  if (shouldReplace) {
+    if (current) {
+      event.tags = [...new Set([...(current.tags ?? []), ...(event.tags ?? [])])].slice(0, 8);
+      event.discoveredVia = [...(current.discoveredVia ?? []), ...(event.discoveredVia ?? [])]
+        .filter((entry, index, entries) => entries.findIndex((candidate) => candidate.type === entry.type && candidate.url === entry.url) === index)
+        .slice(0, 8);
+      deduped[existingIndex] = event;
+    } else {
+      deduped.push(event);
+    }
   } else {
     current.tags = [...new Set([...current.tags, ...event.tags])].slice(0, 8);
+    current.discoveredVia = [...(current.discoveredVia ?? []), ...(event.discoveredVia ?? [])]
+      .filter((entry, index, entries) => entries.findIndex((candidate) => candidate.type === entry.type && candidate.url === entry.url) === index)
+      .slice(0, 8);
   }
 }
 
@@ -255,17 +321,23 @@ let carriedEndedCount = 0;
 if (previousPayload?.generatedFor === targetDate) {
   for (const previousEvent of previousPayload.events ?? []) {
     if (previousEvent.startAt.slice(0, 10) !== targetDate) continue;
-    const key = dedupeKey(previousEvent);
-    if (deduped.has(key)) continue;
+    if (deduped.some((event) => likelyDuplicate(event, previousEvent))) continue;
     addResearchEvent(previousEvent);
     carriedEndedCount += 1;
   }
 }
 
-const enriched = await Promise.all([...deduped.values()].map(discoverPreviewImage));
+const enriched = await Promise.all(deduped.map(discoverPreviewImage));
 const cached = await Promise.all(enriched.map(cacheEventImage));
 const events = cached
-  .map((event) => ({ ...event, id: stableId(event), recommendationScore: recomputeScore(event) }))
+  .map((event) => {
+    const previousMatch = previousPayload?.events?.find((candidate) => likelyDuplicate(candidate, event));
+    return {
+      ...event,
+      id: previousMatch?.id ?? stableId(event),
+      recommendationScore: recomputeScore(event),
+    };
+  })
   .sort((a, b) => b.recommendationScore - a.recommendationScore || a.kotakeMinutes - b.kotakeMinutes);
 
 const sources = new Set(researchPasses.flatMap((researchPass) => researchPass.sourcesConsulted).map((url) => {
@@ -287,4 +359,21 @@ const payload = {
 const errors = validatePayload(payload, targetDate);
 if (errors.length) throw new Error(`Merged payload is invalid:\n${errors.join("\n")}`);
 await fs.writeFile(outputPath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
+if (path.resolve(outputPath).startsWith(path.join(projectRoot, "work") + path.sep)) {
+  const yields = new Map();
+  for (const event of events) {
+    for (const source of event.discoveredVia ?? []) {
+      const key = `${source.type}:${canonicalUrl(source.url)}`;
+      const current = yields.get(key) ?? { type: source.type, url: canonicalUrl(source.url), eventYield: 0 };
+      current.eventYield += 1;
+      yields.set(key, current);
+    }
+  }
+  const performance = {
+    generatedAt: now,
+    eventCount: events.length,
+    sources: [...yields.values()].sort((a, b) => b.eventYield - a.eventYield || a.url.localeCompare(b.url)),
+  };
+  await fs.writeFile(path.join(projectRoot, "work", "source-performance.json"), `${JSON.stringify(performance, null, 2)}\n`, "utf8");
+}
 console.log(`Merged ${researchPasses.map((researchPass) => researchPass.events.length).join(" + ")} candidates from ${researchPasses.length} passes into ${events.length} events across ${coveredDates.length} days; preserved ${carriedEndedCount} same-day events from the earlier publication.`);

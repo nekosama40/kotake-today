@@ -19,25 +19,35 @@ $sourceConfig = Join-Path $projectRoot 'config\research-sources.json'
 $promptFile = Join-Path $workDir "prompt-$TargetDate-$PassName.md"
 $passSchemaFile = Join-Path $workDir "schema-$TargetDate-$PassName.json"
 $socialBriefFile = Join-Path $workDir "social-brief-$TargetDate-$PassName.md"
+$monthlyDraftBriefFile = Join-Path $workDir "monthly-draft-brief-$TargetDate-$PassName.json"
+$priorBriefFile = Join-Path $workDir "prior-brief-$TargetDate-$PassName.json"
+$traceFile = Join-Path $workDir "research-$TargetDate-$PassName.trace.jsonl"
+$stderrFile = Join-Path $workDir "research-$TargetDate-$PassName.stderr.log"
 $targetDates = @($TargetDatesCsv.Split(',') | ForEach-Object { $_.Trim() } | Where-Object { $_ })
 
-if ($targetDates.Count -lt 1 -or $targetDates.Count -gt 2) {
-  throw "TargetDatesCsv must contain one or two dates for $PassName."
+if ($targetDates.Count -lt 1 -or $targetDates.Count -gt 3) {
+  throw "TargetDatesCsv must contain one to three dates for $PassName."
 }
 
 $isAdvancePass = $PassName.StartsWith('next-days-')
+$isGapPass = $PassName -eq 'quality-and-gap'
 $isSocialPass = $PassName -in @('local-and-long-tail', 'next-days-local-and-special')
 $searchMin = switch ($PassName) {
   'local-and-long-tail' { 20 }
   'next-days-local-and-special' { 16 }
+  'quality-and-gap' { 12 }
   default { if ($isAdvancePass) { 12 } else { 16 } }
 }
 $searchMax = switch ($PassName) {
   'local-and-long-tail' { 28 }
   'next-days-local-and-special' { 24 }
+  'quality-and-gap' { 20 }
   default { if ($isAdvancePass) { 18 } else { 24 } }
 }
-$scopeGuidance = if ($isAdvancePass) {
+$scopeGuidance = if ($isGapPass) {
+  '先行5パスで不足した日付・ジャンル・近隣区だけを補完してください。前回候補を一覧として把握し、同じイベントの再出力より新しい候補の発見を優先してください。3日分を横断し、12〜20回で調査を終えてください。'
+}
+elseif ($isAdvancePass) {
   '明日と明後日を1つの調査で横断してください。同じ施設の予定表や開催カレンダーは両日分をまとめて確認し、日付ごとに同じ検索を繰り返さないでください。新着の発見と前回候補の再確認を両立してください。'
 }
 else {
@@ -76,25 +86,48 @@ $breakdownGuidance = switch ($PassName) {
 
 $priorCandidates = @()
 if ($PriorPayloadFile -and (Test-Path -LiteralPath $PriorPayloadFile)) {
-  $priorPayload = Get-Content -LiteralPath $PriorPayloadFile -Raw -Encoding utf8 | ConvertFrom-Json
-  $priorCandidates = @($priorPayload.events | Where-Object {
-    $candidateDate = [string]$_.startAt
-    $candidateDate.Length -ge 10 -and $targetDates -contains $candidateDate.Substring(0, 10)
-  } | ForEach-Object {
-    [ordered]@{
-      title = $_.title
-      startAt = $_.startAt
-      endAt = $_.endAt
-      venueName = $_.venueName
-      ward = $_.ward
-      sourceUrl = $_.sourceUrl
-      availability = $_.availability
-      reservation = $_.reservation
-      sameDayNote = $_.sameDayNote
-    }
-  })
+  Remove-Item -LiteralPath $priorBriefFile -Force -ErrorAction SilentlyContinue
+  & node (Join-Path $scriptDir 'prepare-prior-brief.mjs') $PriorPayloadFile $TargetDatesCsv $PassName $priorBriefFile
+  if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $priorBriefFile)) {
+    throw "Unable to prepare the prior candidate brief for $PassName."
+  }
+  $priorBrief = Get-Content -LiteralPath $priorBriefFile -Raw -Encoding utf8 | ConvertFrom-Json
+  $priorCandidates = @($priorBrief.candidates)
 }
 $priorCandidatesJson = if ($priorCandidates.Count -eq 0) { '[]' } else { ConvertTo-Json -InputObject $priorCandidates -Depth 4 -Compress }
+
+$monthlyDraftCandidatesJson = '[]'
+$monthlyDraftCandidateCount = 0
+$monthlyDraftSummary = '対象日を含むLuna月間下書きはありません。通常の新規探索を続けてください。'
+$monthlyDraftCommandOutput = @()
+$priorPayloadArgument = if ($PriorPayloadFile) { $PriorPayloadFile } else { '-' }
+Remove-Item -LiteralPath $monthlyDraftBriefFile -Force -ErrorAction SilentlyContinue
+$savedDraftErrorPreference = $ErrorActionPreference
+$ErrorActionPreference = 'Continue'
+$monthlyDraftCommandOutput = @(& node (Join-Path $scriptDir 'prepare-monthly-draft-brief.mjs') $workDir $TargetDatesCsv $PassName $priorPayloadArgument $monthlyDraftBriefFile 2>&1)
+$monthlyDraftExitCode = $LASTEXITCODE
+$ErrorActionPreference = $savedDraftErrorPreference
+if ($monthlyDraftExitCode -eq 0 -and (Test-Path -LiteralPath $monthlyDraftBriefFile)) {
+  try {
+    $monthlyDraftBrief = Get-Content -LiteralPath $monthlyDraftBriefFile -Raw -Encoding utf8 | ConvertFrom-Json
+    $monthlyDraftCandidates = @($monthlyDraftBrief.candidates)
+    $monthlyDraftCandidateCount = $monthlyDraftCandidates.Count
+    if ($monthlyDraftCandidateCount -gt 0) {
+      $monthlyDraftCandidatesJson = ConvertTo-Json -InputObject $monthlyDraftCandidates -Depth 5 -Compress
+    }
+    if ($monthlyDraftBrief.draftFile) {
+      $monthlyDraftSummary = "使用下書き: $($monthlyDraftBrief.draftFile)（作成 $($monthlyDraftBrief.draftGeneratedAt)）。このパスでは$monthlyDraftCandidateCount件を再確認してください。"
+    }
+  }
+  catch {
+    $monthlyDraftSummary = '月間下書き候補の読み込みに失敗しました。下書きに依存せず通常の新規探索を続けてください。'
+    $monthlyDraftCandidatesJson = '[]'
+    $monthlyDraftCandidateCount = 0
+  }
+}
+elseif ($monthlyDraftExitCode -ne 0) {
+  $monthlyDraftSummary = '月間下書き候補の準備に失敗しました。下書きに依存せず通常の新規探索を続けてください。'
+}
 
 if (-not (Test-Path -LiteralPath $sourceConfig)) {
   throw "Research source config does not exist: $sourceConfig"
@@ -118,23 +151,13 @@ $prompt = $prompt.Replace('{{SEARCH_MIN}}', [string]$searchMin)
 $prompt = $prompt.Replace('{{SEARCH_MAX}}', [string]$searchMax)
 $prompt = $prompt.Replace('{{BREAKDOWN_GUIDANCE}}', $breakdownGuidance)
 $prompt = $prompt.Replace('{{PRIOR_CANDIDATES}}', $priorCandidatesJson)
+$prompt = $prompt.Replace('{{MONTHLY_DRAFT_SUMMARY}}', $monthlyDraftSummary)
+$prompt = $prompt.Replace('{{MONTHLY_DRAFT_CANDIDATES}}', $monthlyDraftCandidatesJson)
 Set-Content -LiteralPath $promptFile -Value $prompt -Encoding utf8
 & node (Join-Path $scriptDir 'prepare-research-schema.mjs') $schemaFile $PassName $passSchemaFile
 if ($LASTEXITCODE -ne 0) {
   throw "Unable to prepare the output schema for $PassName."
 }
-
-$codexArgs = @(
-  'exec', '--ephemeral', '--color', 'never',
-  '--sandbox', 'read-only',
-  '--model', 'gpt-5.6-luna',
-  '--config', 'model_reasoning_effort="max"',
-  '--enable', 'browser_use',
-  '--output-schema', $passSchemaFile,
-  '--output-last-message', $OutputFile,
-  '--cd', $projectRoot,
-  '-'
-)
 
 $utf8Encoding = New-Object System.Text.UTF8Encoding($false)
 $OutputEncoding = $utf8Encoding
@@ -143,10 +166,20 @@ $OutputEncoding = $utf8Encoding
 $env:PYTHONUTF8 = '1'
 $env:PYTHONIOENCODING = 'utf-8'
 
-"[$((Get-Date).ToString('o'))] Starting $PassName" | Set-Content -LiteralPath $PassLogFile -Encoding utf8
+$passStartLine = "[$((Get-Date).ToString('o'))] Starting $PassName"
+$monthlyDraftLogLine = "[$((Get-Date).ToString('o'))] $PassName monthly draft recheck candidates: $monthlyDraftCandidateCount. $monthlyDraftSummary"
+$passStartLine | Set-Content -LiteralPath $PassLogFile -Encoding utf8
+$monthlyDraftCommandOutput | Add-Content -LiteralPath $PassLogFile -Encoding utf8
+$monthlyDraftLogLine | Tee-Object -FilePath $PassLogFile -Append
 $savedErrorPreference = $ErrorActionPreference
 $ErrorActionPreference = 'Continue'
-Get-Content -LiteralPath $promptFile -Raw -Encoding utf8 | & codex @codexArgs 2>&1 | Tee-Object -FilePath $PassLogFile -Append
+$codexCommand = Get-Command codex -ErrorAction Stop
+$codexBinDir = Split-Path -Parent $codexCommand.Source
+$codexJs = Join-Path $codexBinDir 'node_modules\@openai\codex\bin\codex.js'
+if (-not (Test-Path -LiteralPath $codexJs)) {
+  throw "Unable to locate the installed Codex CLI JavaScript entry point."
+}
+& node (Join-Path $scriptDir 'run-codex-research.mjs') $codexJs $promptFile $passSchemaFile $OutputFile $traceFile $stderrFile $projectRoot 2>&1 | Add-Content -LiteralPath $PassLogFile -Encoding utf8
 $codexExitCode = $LASTEXITCODE
 $ErrorActionPreference = $savedErrorPreference
 if ($codexExitCode -ne 0) {

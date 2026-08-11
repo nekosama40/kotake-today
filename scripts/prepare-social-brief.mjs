@@ -1,4 +1,5 @@
 import fs from "node:fs/promises";
+import path from "node:path";
 
 const [configPath, targetDate, passName, outputPath] = process.argv.slice(2);
 const socialPasses = new Set(["local-and-long-tail", "next-days-local-and-special"]);
@@ -13,6 +14,12 @@ if (!/^\d{4}-\d{2}-\d{2}$/.test(targetDate)) {
 }
 
 const config = JSON.parse(await fs.readFile(configPath, "utf8"));
+let performance = { sources: [] };
+try {
+  performance = JSON.parse(await fs.readFile(path.resolve(path.dirname(configPath), "..", "work", "source-performance.json"), "utf8"));
+} catch {
+  // The first run has no source-yield history yet.
+}
 const accounts = Array.isArray(config.accounts) ? config.accounts : [];
 const directories = Array.isArray(config.directories) ? config.directories : [];
 const ids = new Set();
@@ -45,11 +52,25 @@ if (socialPasses.has(passName)) {
   selectedDirectories = directories.filter((directory) => directory.genres.some((genre) => themedGenres.has(genre)));
 }
 
-selectedAccounts.sort((left, right) => left.rank - right.rank || left.name.localeCompare(right.name, "ja"));
+function accountYield(account) {
+  const handle = String(account.handle ?? "").replace(/^@/, "").toLowerCase();
+  const accountUrl = account.url.toLowerCase().replace(/\/$/, "");
+  return (performance.sources ?? []).reduce((total, source) => {
+    const sourceUrl = String(source.url ?? "").toLowerCase();
+    return total + (sourceUrl.startsWith(accountUrl) || (handle && sourceUrl.includes(handle)) ? Number(source.eventYield ?? 0) : 0);
+  }, 0);
+}
+
+selectedAccounts.sort((left, right) => accountYield(right) - accountYield(left)
+  || left.rank - right.rank || left.name.localeCompare(right.name, "ja"));
 const cadenceLabel = (cadence) => cadence === "core" ? "毎日優先" : "交互確認";
 const accountLines = selectedAccounts.length === 0
   ? ["- このパスでは監視アカウントの個別確認は必須ではありません。"]
-  : selectedAccounts.map((account) => `- [${cadenceLabel(account.cadence)}／${account.platform}] ${account.name} ${account.handle}: ${account.url} — ${account.genres.join("・")}。${account.note}`);
+  : selectedAccounts.map((account) => {
+    const yieldCount = accountYield(account);
+    const performanceLabel = yieldCount > 0 ? `／前回採用${yieldCount}件` : "";
+    return `- [${cadenceLabel(account.cadence)}／${account.platform}${performanceLabel}] ${account.name} ${account.handle}: ${account.url} — ${account.genres.join("・")}。${account.note}`;
+  });
 const directoryLines = selectedDirectories.length === 0
   ? ["- このパスではSNS以外のまとめ先リストは使用しません。"]
   : selectedDirectories.map((directory) => `- ${directory.name}: ${directory.url} — ${directory.genres.join("・")}`);
