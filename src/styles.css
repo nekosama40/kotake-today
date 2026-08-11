@@ -1092,9 +1092,6 @@ footer small {
   }
 
   .controls {
-    position: sticky;
-    top: 56px;
-    z-index: 10;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     margin-right: -4vw;
     margin-left: -4vw;
