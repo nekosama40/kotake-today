@@ -170,7 +170,8 @@ $passStartLine = "[$((Get-Date).ToString('o'))] Starting $PassName"
 $monthlyDraftLogLine = "[$((Get-Date).ToString('o'))] $PassName monthly draft recheck candidates: $monthlyDraftCandidateCount. $monthlyDraftSummary"
 $passStartLine | Set-Content -LiteralPath $PassLogFile -Encoding utf8
 $monthlyDraftCommandOutput | Add-Content -LiteralPath $PassLogFile -Encoding utf8
-$monthlyDraftLogLine | Tee-Object -FilePath $PassLogFile -Append
+$monthlyDraftLogLine | Add-Content -LiteralPath $PassLogFile -Encoding utf8
+Write-Output $monthlyDraftLogLine
 $savedErrorPreference = $ErrorActionPreference
 $ErrorActionPreference = 'Continue'
 $codexCommand = Get-Command codex -ErrorAction Stop
