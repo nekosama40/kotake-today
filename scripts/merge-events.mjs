@@ -177,8 +177,9 @@ function recomputeScore(event) {
   return Math.min(75, contentScore + availabilityScore + reservationScore + proximityScore + confidenceScore);
 }
 
-function stableId(event) {
-  const key = `${canonicalUrl(event.sourceUrl)}:${event.startAt}:${normalize(event.title)}`;
+function stableId(event, discriminator = "") {
+  const baseKey = `${canonicalUrl(event.sourceUrl)}:${event.startAt}:${normalize(event.title)}`;
+  const key = discriminator ? `${baseKey}:${discriminator}` : baseKey;
   const digest = crypto.createHash("sha1").update(key).digest("hex").slice(0, 10);
   return `event-${digest}`;
 }
@@ -329,12 +330,20 @@ if (previousPayload?.generatedFor === targetDate) {
 
 const enriched = await Promise.all(deduped.map(discoverPreviewImage));
 const cached = await Promise.all(enriched.map(cacheEventImage));
+const usedEventIds = new Set();
 const events = cached
   .map((event) => {
     const previousMatch = previousPayload?.events?.find((candidate) => likelyDuplicate(candidate, event));
+    let id = previousMatch?.id ?? stableId(event);
+    let collisionIndex = 0;
+    while (usedEventIds.has(id)) {
+      collisionIndex += 1;
+      id = stableId(event, `${normalize(event.venueName)}:${normalize(event.nearestStation)}:${collisionIndex}`);
+    }
+    usedEventIds.add(id);
     return {
       ...event,
-      id: previousMatch?.id ?? stableId(event),
+      id,
       recommendationScore: recomputeScore(event),
     };
   })

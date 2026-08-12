@@ -264,6 +264,43 @@ describe("research pipeline", () => {
     }
   });
 
+  it("keeps event ids unique when two current events fuzzily match one previous event", async () => {
+    const currentA = { ...eventFor(targetDate, "おはなし会"), venueName: "図書館A" };
+    const currentB = {
+      ...eventFor(targetDate, "おはなし会"),
+      venueName: "図書館B",
+      sourceUrl: "https://different.example/story-time",
+    };
+    const previousEvent = {
+      ...eventFor(targetDate, "おはなし会"),
+      id: "event-previous",
+      venueName: "図書館A図書館B",
+      sourceUrl: "https://previous.example/story-time",
+    };
+    const previousPayload = {
+      generatedFor: targetDate,
+      coveredDates: [targetDate],
+      generatedAt: "2099-01-01T00:00:00+09:00",
+      publishedAt: "2099-01-01T07:00:00+09:00",
+      searchPasses: 3,
+      sourceCount: 1,
+      events: [previousEvent],
+    };
+    const execution = await runMerge([
+      legacyResearchPass("official-and-major"),
+      { ...legacyResearchPass("local-and-long-tail"), events: [currentA, currentB] },
+    ], undefined, previousPayload);
+    try {
+      expect(execution.result.status, execution.result.stderr).toBe(0);
+      const output = JSON.parse(await readFile(execution.outputPath, "utf8"));
+      const ids = output.events.map((event: { id: string }) => event.id);
+      expect(new Set(ids).size).toBe(2);
+      expect(ids).toContain("event-previous");
+    } finally {
+      await rm(execution.tempDir, { recursive: true, force: true });
+    }
+  });
+
   it("requires a measured social-search breakdown in a five-pass run", async () => {
     const existingOutput = "preserve-five-pass-output\n";
     const invalidSocialPass = researchPass("local-and-long-tail", null);

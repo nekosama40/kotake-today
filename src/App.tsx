@@ -216,7 +216,7 @@ function App() {
     if (!payload) return [];
     return payload.coveredDates?.length ? payload.coveredDates : [payload.generatedFor];
   }, [payload]);
-  const dataIsCurrent = payload?.generatedFor === currentTokyoDate && coveredDates.includes(currentTokyoDate);
+  const dataIsCurrent = coveredDates.includes(currentTokyoDate);
   const selectedIsToday = selectedDate === currentTokyoDate;
 
   useEffect(() => {
