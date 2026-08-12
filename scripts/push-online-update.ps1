@@ -26,27 +26,44 @@ function Invoke-LoggedGit {
   }
 }
 
-function Assert-NoStagedChanges {
-  $savedErrorPreference = $ErrorActionPreference
-  $ErrorActionPreference = 'Continue'
-  & git diff --cached --quiet
-  $stagedExitCode = $LASTEXITCODE
-  $ErrorActionPreference = $savedErrorPreference
-  if ($stagedExitCode -eq 1) {
-    throw 'Online update stopped because unrelated staged changes already exist.'
-  }
-  if ($stagedExitCode -ne 0) {
-    throw "Unable to inspect staged changes (exit $stagedExitCode)."
+function Assert-NoUnrelatedStagedChanges {
+  $unexpectedStaged = @(@(& git diff --cached --name-only) | Where-Object {
+    $_ -notmatch '^(?:public/data/events\.json|public/images/events/.+)$'
+  })
+  if ($LASTEXITCODE -ne 0) { throw 'Unable to inspect staged changes.' }
+  if ($unexpectedStaged.Count -gt 0) {
+    throw "Online update stopped because unrelated staged paths already exist: $($unexpectedStaged -join ', ')"
   }
 }
 
-function Assert-SyncedMain {
+function Sync-MainAndResumeDailyCommit {
   Invoke-LoggedGit -GitArguments @('fetch', '--quiet', 'origin', 'main')
   $localHead = (& git rev-parse HEAD).Trim()
   $remoteHead = (& git rev-parse origin/main).Trim()
-  if ($LASTEXITCODE -ne 0 -or $localHead -ne $remoteHead) {
-    throw 'Online update stopped because local main and origin/main are not identical.'
+  if ($LASTEXITCODE -ne 0) { throw 'Unable to compare local main with origin/main.' }
+  if ($localHead -eq $remoteHead) { return $localHead }
+
+  $savedErrorPreference = $ErrorActionPreference
+  $ErrorActionPreference = 'Continue'
+  & git merge-base --is-ancestor origin/main HEAD
+  $ancestorExitCode = $LASTEXITCODE
+  $ErrorActionPreference = $savedErrorPreference
+  $aheadCount = (& git rev-list --count origin/main..HEAD).Trim()
+  $commitSubject = (& git log -1 --pretty=%s HEAD).Trim()
+  if ($LASTEXITCODE -ne 0 -or $ancestorExitCode -ne 0 -or $aheadCount -ne '1' -or $commitSubject -notmatch '^Daily events \d{4}-\d{2}-\d{2}$') {
+    throw 'Online update stopped because local main contains changes other than one unpushed daily event commit.'
   }
+
+  $unexpectedCommitted = @(@(& git diff-tree --no-commit-id --name-only -r HEAD) | Where-Object {
+    $_ -notmatch '^(?:public/data/events\.json|public/images/events/.+)$'
+  })
+  if ($LASTEXITCODE -ne 0 -or $unexpectedCommitted.Count -gt 0) {
+    throw 'Online update stopped because the unpushed commit contains unexpected paths.'
+  }
+
+  $resumeRefSpec = '{0}:refs/heads/main' -f $localHead
+  Invoke-LoggedGit -GitArguments @('push', '--quiet', 'origin', $resumeRefSpec)
+  Write-OnlineLog "Resumed and pushed the previously committed daily update $localHead."
   return $localHead
 }
 
@@ -60,8 +77,8 @@ if ($LASTEXITCODE -ne 0 -or $remote -notmatch 'github\.com[:/]nekosama40/kotake-
   throw "Unexpected origin remote: $remote"
 }
 
-Assert-NoStagedChanges
-$initialHead = Assert-SyncedMain
+Assert-NoUnrelatedStagedChanges
+$initialHead = Sync-MainAndResumeDailyCommit
 $publishMutex = [System.Threading.Mutex]::new($false, 'Local\KotakeEventsPublish')
 $publishMutexAcquired = $false
 
@@ -100,12 +117,12 @@ try {
     throw "Validated public data for $TargetDate was not ready within 10 minutes."
   }
 
-  Assert-NoStagedChanges
-  $baseHead = Assert-SyncedMain
+  Assert-NoUnrelatedStagedChanges
+  $baseHead = Sync-MainAndResumeDailyCommit
   Invoke-LoggedGit -GitArguments (@('add', '-A', '--') + $publicPaths)
 
   $unexpectedStaged = @(@(& git diff --cached --name-only) | Where-Object {
-    $_ -notmatch '^(public/data/events\.json|public/images/events/)'
+    $_ -notmatch '^(?:public/data/events\.json|public/images/events/.+)$'
   })
   if ($unexpectedStaged.Count -gt 0) {
     throw "Online update stopped because unexpected paths were staged: $($unexpectedStaged -join ', ')"
@@ -133,7 +150,7 @@ try {
   }
 
   $unexpectedCommitted = @(@(& git diff-tree --no-commit-id --name-only -r $createdHead) | Where-Object {
-    $_ -notmatch '^(public/data/events\.json|public/images/events/)'
+    $_ -notmatch '^(?:public/data/events\.json|public/images/events/.+)$'
   })
   if ($unexpectedCommitted.Count -gt 0) {
     throw "Online update stopped because the generated commit contains unexpected paths: $($unexpectedCommitted -join ', ')"

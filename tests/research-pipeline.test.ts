@@ -488,6 +488,7 @@ describe("research pipeline", () => {
     const researchRunner = await readFile(path.join(projectRoot, "scripts", "run-codex-research.mjs"), "utf8");
     const researchPrompt = await readFile(path.join(projectRoot, "prompts", "daily-update.md"), "utf8");
     const taskScript = await readFile(path.join(projectRoot, "scripts", "register-scheduled-tasks.ps1"), "utf8");
+    const dailyScript = await readFile(path.join(projectRoot, "scripts", "run-daily-update.ps1"), "utf8");
     expect(generationScript.match(/Start-Job -Name/g)).toHaveLength(6);
     expect(generationScript).toContain("five complete standard passes");
     expect(generationScript).toContain("gapDeadline");
@@ -514,8 +515,15 @@ describe("research pipeline", () => {
     expect(researchPrompt).toContain("公式告知を確認できない月間候補");
     expect(researchPrompt).toContain("`transferCount`");
     expect(researchPrompt).toContain("`discoveredVia`");
-    expect(taskScript).toContain("-At '03:45'");
-    expect(taskScript).toContain("-At '06:25'");
-    expect(taskScript).toContain("-At '06:35'");
+    expect(taskScript).toContain("-At '02:30'");
+    expect(taskScript).toContain("-At '04:30'");
+    expect(taskScript).toContain("New-ScheduledTaskTrigger -AtLogOn");
+    expect(taskScript).toContain("KotakeEvents-Daily");
+    expect(taskScript.indexOf("Register-ScheduledTask -TaskName 'KotakeEvents-Daily'")).toBeLessThan(taskScript.indexOf("foreach ($oldTaskName"));
+    expect(taskScript).toContain("Stop-ScheduledTask -TaskName $oldTaskName");
+    expect(dailyScript).toContain("duplicate Luna research was skipped");
+    expect(dailyScript).toContain("generate-events.ps1");
+    expect(dailyScript).toContain("publish-events.ps1");
+    expect(dailyScript).toContain("push-online-update.ps1");
   });
 });
