@@ -176,6 +176,7 @@ export function formatTimeRange(event: EventItem): string {
     minute: "2-digit",
   });
   const start = formatter.format(new Date(event.startAt));
+  if (event.endAt === null && start === "00:00") return "開催時間は公式で確認";
   return event.endAt === null ? `${start}〜終了時刻は公式で確認` : `${start}–${formatter.format(new Date(event.endAt))}`;
 }
 

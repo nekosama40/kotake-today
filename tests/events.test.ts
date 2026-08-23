@@ -79,6 +79,9 @@ describe("event helpers", () => {
     expect(isEventVisible(unknownEnd, new Date("2026-08-07T12:00:00Z"))).toBe(true);
     expect(isEventVisible(unknownEnd, new Date("2026-08-07T12:40:00Z"))).toBe(false);
     expect(formatTimeRange(unknownEnd)).toContain("終了時刻は公式で確認");
+
+    const unknownAllDayTime = { ...base, startAt: "2026-08-07T00:00:00+09:00", endAt: null };
+    expect(formatTimeRange(unknownAllDayTime)).toBe("開催時間は公式で確認");
   });
 
   it("treats date-only events as all-day in Tokyo", () => {
