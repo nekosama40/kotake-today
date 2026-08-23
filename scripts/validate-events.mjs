@@ -18,8 +18,8 @@ export function validatePayload(payload, expectedDate) {
   if (expectedDate && payload.generatedFor !== expectedDate) errors.push(`generatedFor must be ${expectedDate}`);
   const coveredDates = payload.coveredDates ?? [payload.generatedFor];
   const validCoveredDates = Array.isArray(coveredDates) ? coveredDates : [];
-  if (!Array.isArray(coveredDates) || coveredDates.length < 1 || coveredDates.length > 3) {
-    errors.push("coveredDates must contain one to three dates");
+  if (!Array.isArray(coveredDates) || coveredDates.length < 1 || coveredDates.length > 31) {
+    errors.push("coveredDates must contain one to 31 dates");
   } else {
     if (new Set(coveredDates).size !== coveredDates.length) errors.push("coveredDates must be unique");
     if (coveredDates[0] !== payload.generatedFor) errors.push("coveredDates must start with generatedFor");

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   availabilityLabel,
   eventMatchesGenre,
@@ -50,6 +50,26 @@ function dateDifference(date: string, baseDate: string): number {
   return Math.round((new Date(`${date}T00:00:00Z`).getTime() - new Date(`${baseDate}T00:00:00Z`).getTime()) / 86_400_000);
 }
 
+function addDays(date: string, days: number): string {
+  const value = new Date(`${date}T00:00:00Z`);
+  value.setUTCDate(value.getUTCDate() + days);
+  return value.toISOString().slice(0, 10);
+}
+
+export function normalizeCoveredDates(dates: string[] | undefined, generatedFor: string): string[] {
+  const source = dates?.length ? dates : [generatedFor];
+  return [...new Set(source.filter((date) => /^\d{4}-\d{2}-\d{2}$/.test(date)))].sort();
+}
+
+export function selectionAfterTokyoDateChange(
+  selectedDate: string,
+  previousTokyoDate: string,
+  currentTokyoDate: string,
+  followingToday: boolean,
+): string {
+  return followingToday && previousTokyoDate !== currentTokyoDate ? currentTokyoDate : selectedDate;
+}
+
 function relativeDateLabel(date: string, today: string): string {
   const difference = dateDifference(date, today);
   if (difference === 0) return "今日";
@@ -66,6 +86,18 @@ function compactDateLabel(date: string): string {
     weekday: "short",
   }).formatToParts(new Date(`${date}T00:00:00+09:00`)).map((part) => [part.type, part.value]));
   return `${parts.month}/${parts.day}（${parts.weekday}）`;
+}
+
+function coverageRangeLabel(dates: string[]): string {
+  if (dates.length === 0) return "準備中";
+  const first = dates[0];
+  const last = dates[dates.length - 1];
+  const firstYear = first.slice(0, 4);
+  const lastYear = last.slice(0, 4);
+  const short = (date: string) => `${Number(date.slice(5, 7))}/${Number(date.slice(8, 10))}`;
+  return firstYear === lastYear
+    ? `${short(first)}〜${short(last)}`
+    : `${firstYear}/${short(first)}〜${lastYear}/${short(last)}`;
 }
 
 function EventVisual({ event, featured = false }: { event: EventItem; featured?: boolean }) {
@@ -177,12 +209,17 @@ function App() {
   const [freeOnly, setFreeOnly] = useState(false);
   const [walkInOnly, setWalkInOnly] = useState(false);
   const [showEnded, setShowEnded] = useState(false);
+  const initialTokyoDate = useRef(tokyoDate()).current;
+  const initialRequestedDate = useRef(new URLSearchParams(window.location.search).get("date")).current;
   const [selectedDate, setSelectedDate] = useState(() => {
-    const requested = new URLSearchParams(window.location.search).get("date");
-    return requested && /^\d{4}-\d{2}-\d{2}$/.test(requested) ? requested : tokyoDate();
+    return initialRequestedDate && /^\d{4}-\d{2}-\d{2}$/.test(initialRequestedDate) ? initialRequestedDate : initialTokyoDate;
   });
+  const [followingToday, setFollowingToday] = useState(
+    () => !initialRequestedDate || initialRequestedDate === initialTokyoDate,
+  );
   const [clock, setClock] = useState(new Date());
   const [visibleCount, setVisibleCount] = useState(12);
+  const previousTokyoDate = useRef(initialTokyoDate);
 
   useEffect(() => {
     const timer = window.setInterval(() => setClock(new Date()), 60_000);
@@ -197,7 +234,9 @@ function App() {
     if (linkedEvent) {
       const linkedDate = linkedEvent.startAt.slice(0, 10);
       setSelectedDate(linkedDate);
-      if (linkedDate === tokyoDate() && !isEventVisible(linkedEvent, new Date())) setShowEnded(true);
+      const currentDate = tokyoDate();
+      setFollowingToday(linkedDate === currentDate);
+      if (linkedDate === currentDate && !isEventVisible(linkedEvent, new Date())) setShowEnded(true);
     }
   }, [payload]);
 
@@ -214,20 +253,45 @@ function App() {
   const currentTokyoDate = tokyoDate(clock);
   const coveredDates = useMemo(() => {
     if (!payload) return [];
-    return payload.coveredDates?.length ? payload.coveredDates : [payload.generatedFor];
+    return normalizeCoveredDates(payload.coveredDates, payload.generatedFor);
   }, [payload]);
-  const dataIsCurrent = coveredDates.includes(currentTokyoDate);
   const selectedIsToday = selectedDate === currentTokyoDate;
+  const selectedDateIsCovered = coveredDates.includes(selectedDate);
+  const coverageEnded = coveredDates.length > 0 && coveredDates[coveredDates.length - 1] < currentTokyoDate;
+  const quickDates = useMemo(() => [
+    { date: currentTokyoDate, label: "今日" },
+    { date: addDays(currentTokyoDate, 1), label: "明日" },
+    { date: addDays(currentTokyoDate, 2), label: "明後日" },
+  ], [currentTokyoDate]);
+  const quickDateValues = useMemo(() => new Set(quickDates.map(({ date }) => date)), [quickDates]);
+  const selectedIsQuickDate = quickDateValues.has(selectedDate);
+
+  const selectDate = (date: string) => {
+    setSelectedDate(date);
+    setFollowingToday(date === currentTokyoDate);
+  };
+
+  useEffect(() => {
+    const previousDate = previousTokyoDate.current;
+    if (previousDate === currentTokyoDate) return;
+    previousTokyoDate.current = currentTokyoDate;
+    setSelectedDate((date) => selectionAfterTokyoDateChange(
+      date,
+      previousDate,
+      currentTokyoDate,
+      followingToday,
+    ));
+  }, [currentTokyoDate, followingToday]);
 
   useEffect(() => {
     if (coveredDates.length === 0 || coveredDates.includes(selectedDate)) return;
-    setSelectedDate(coveredDates.includes(currentTokyoDate) ? currentTokyoDate : coveredDates[0]);
+    setSelectedDate(coveredDates.includes(currentTokyoDate) ? currentTokyoDate : coveredDates[coveredDates.length - 1]);
   }, [coveredDates, currentTokyoDate, selectedDate]);
 
   const selectedDateEvents = useMemo(() => {
-    if (!payload || !dataIsCurrent) return [];
+    if (!payload) return [];
     return payload.events.filter((event) => isEventOnDate(event, selectedDate));
-  }, [payload, dataIsCurrent, selectedDate]);
+  }, [payload, selectedDate]);
 
   const visibleEvents = useMemo(() => {
     if (!selectedIsToday || showEnded) return selectedDateEvents;
@@ -292,7 +356,7 @@ function App() {
   const selectedRelativeLabel = relativeDateLabel(selectedDate, currentTokyoDate);
   const sectionTitle = selectedIsToday
     ? (showEnded ? "今日のイベント" : "これから行けるイベント")
-    : `${selectedRelativeLabel}のイベント`;
+    : `${selectedRelativeLabel === "予定" ? compactDateLabel(selectedDate) : selectedRelativeLabel}のイベント`;
 
   if (error) return <main className="state-page"><p>{error}</p></main>;
   if (!payload) return <main className="state-page"><div className="loader" /><p>今日の東京を探しています</p></main>;
@@ -304,7 +368,7 @@ function App() {
           <span className="brand-dot" />
           こたけから、きょう。
         </a>
-        <div className="header-note">毎朝7:00までに更新</div>
+        <div className="header-note">掲載期間 {coverageRangeLabel(coveredDates)}</div>
       </header>
 
       <main id="top">
@@ -318,32 +382,52 @@ function App() {
           </div>
         </section>
 
-        {!dataIsCurrent && (
+        {coverageEnded && (
           <div className="notice">
-            今日の更新データを待っています。前回の情報は日付違いを防ぐため非表示にしています。
+            掲載期間が終了しました。次回の更新待ちです。下の日付から掲載済みのイベントを確認できます。
           </div>
         )}
 
         <section className="all-events section-shell">
           <div className="section-heading">
             <div><span className="section-number">01</span><h2>{sectionTitle}</h2></div>
-            <p>{selectedIsToday ? "終了分は「終了」で確認できます。" : "参加条件と空き状況は毎朝確認しています。"}</p>
+            <p>{selectedIsToday ? "終了分は「終了」で確認できます。" : "参加条件と空き状況は調査時点の情報です。"}</p>
           </div>
 
-          <nav className="date-tabs" aria-label="表示する日付">
-            {coveredDates.map((date) => (
-              <button
-                key={date}
-                type="button"
-                className={selectedDate === date ? "active" : ""}
-                aria-pressed={selectedDate === date}
-                onClick={() => setSelectedDate(date)}
+          <div className="date-navigation">
+            <nav className="date-tabs" aria-label="今日から3日間">
+              {quickDates.map(({ date, label }) => {
+                const isCovered = coveredDates.includes(date);
+                return (
+                  <button
+                    key={date}
+                    type="button"
+                    className={selectedDate === date ? "active" : ""}
+                    aria-pressed={selectedDate === date}
+                    disabled={!isCovered}
+                    title={isCovered ? undefined : "掲載期間外です"}
+                    onClick={() => selectDate(date)}
+                  >
+                    <span>{label}</span>
+                    <strong>{compactDateLabel(date)}</strong>
+                  </button>
+                );
+              })}
+            </nav>
+            <label className="other-date-select">
+              <span>ほかの日を見る</span>
+              <select
+                aria-label="ほかの日を見る"
+                value={!selectedIsQuickDate && selectedDateIsCovered ? selectedDate : ""}
+                onChange={(event) => selectDate(event.target.value)}
               >
-                <span>{relativeDateLabel(date, currentTokyoDate)}</span>
-                <strong>{compactDateLabel(date)}</strong>
-              </button>
-            ))}
-          </nav>
+                <option value="" disabled>日付を選択</option>
+                {coveredDates.filter((date) => !quickDateValues.has(date)).map((date) => (
+                  <option key={date} value={date}>{compactDateLabel(date)}</option>
+                ))}
+              </select>
+            </label>
+          </div>
 
           {recommendations.length > 0 && (
             <section className="recommendation-strip" aria-labelledby="recommendation-title">

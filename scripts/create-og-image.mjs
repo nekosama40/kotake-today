@@ -14,7 +14,7 @@ const svg = `
   <text x="188" y="145" fill="#1e3d8f" font-family="sans-serif" font-size="30" font-weight="700" letter-spacing="5">TOKYO / TODAY</text>
   <text x="90" y="330" fill="#22201c" font-family="serif" font-size="108" font-weight="700">こたけから、</text>
   <text x="90" y="465" fill="#e3472e" font-family="serif" font-size="128" font-weight="700">きょう。</text>
-  <text x="94" y="550" fill="#706b63" font-family="sans-serif" font-size="29">小竹向原から約1時間以内。今日から3日分の東京イベント。</text>
+  <text x="94" y="550" fill="#706b63" font-family="sans-serif" font-size="29">小竹向原から約1時間以内。今日から約1か月分の東京イベント。</text>
 </svg>`;
 
 await sharp(Buffer.from(svg)).png().toFile(outputPath);

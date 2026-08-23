@@ -482,7 +482,7 @@ describe("research pipeline", () => {
     }
   });
 
-  it("keeps five jobs, the efficient next-days passes, and the before-seven schedule configured", async () => {
+  it("keeps the legacy daily pipeline testable but prevents daily AI scheduling", async () => {
     const generationScript = await readFile(path.join(projectRoot, "scripts", "generate-events.ps1"), "utf8");
     const researchScript = await readFile(path.join(projectRoot, "scripts", "research-pass.ps1"), "utf8");
     const researchRunner = await readFile(path.join(projectRoot, "scripts", "run-codex-research.mjs"), "utf8");
@@ -515,12 +515,10 @@ describe("research pipeline", () => {
     expect(researchPrompt).toContain("公式告知を確認できない月間候補");
     expect(researchPrompt).toContain("`transferCount`");
     expect(researchPrompt).toContain("`discoveredVia`");
-    expect(taskScript).toContain("-At '02:30'");
-    expect(taskScript).toContain("-At '04:30'");
-    expect(taskScript).toContain("New-ScheduledTaskTrigger -AtLogOn");
     expect(taskScript).toContain("KotakeEvents-Daily");
-    expect(taskScript.indexOf("Register-ScheduledTask -TaskName 'KotakeEvents-Daily'")).toBeLessThan(taskScript.indexOf("foreach ($oldTaskName"));
-    expect(taskScript).toContain("Stop-ScheduledTask -TaskName $oldTaskName");
+    expect(taskScript).toContain("Disable-ScheduledTask -TaskName 'KotakeEvents-Daily'");
+    expect(taskScript).not.toContain("Register-ScheduledTask");
+    expect(taskScript).toContain("run-monthly-update.ps1");
     expect(dailyScript).toContain("duplicate Luna research was skipped");
     expect(dailyScript).toContain("generate-events.ps1");
     expect(dailyScript).toContain("publish-events.ps1");

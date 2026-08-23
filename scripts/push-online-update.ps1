@@ -1,5 +1,6 @@
 param(
-  [string]$TargetDate = (Get-Date).ToString('yyyy-MM-dd')
+  [string]$TargetDate = (Get-Date).ToString('yyyy-MM-dd'),
+  [ValidateSet('Daily', 'Monthly')][string]$UpdateMode = 'Daily'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -36,7 +37,7 @@ function Assert-NoUnrelatedStagedChanges {
   }
 }
 
-function Sync-MainAndResumeDailyCommit {
+function Sync-MainAndResumeEventCommit {
   Invoke-LoggedGit -GitArguments @('fetch', '--quiet', 'origin', 'main')
   $localHead = (& git rev-parse HEAD).Trim()
   $remoteHead = (& git rev-parse origin/main).Trim()
@@ -50,8 +51,8 @@ function Sync-MainAndResumeDailyCommit {
   $ErrorActionPreference = $savedErrorPreference
   $aheadCount = (& git rev-list --count origin/main..HEAD).Trim()
   $commitSubject = (& git log -1 --pretty=%s HEAD).Trim()
-  if ($LASTEXITCODE -ne 0 -or $ancestorExitCode -ne 0 -or $aheadCount -ne '1' -or $commitSubject -notmatch '^Daily events \d{4}-\d{2}-\d{2}$') {
-    throw 'Online update stopped because local main contains changes other than one unpushed daily event commit.'
+  if ($LASTEXITCODE -ne 0 -or $ancestorExitCode -ne 0 -or $aheadCount -ne '1' -or $commitSubject -notmatch '^(?:Daily|Monthly) events \d{4}-\d{2}-\d{2}$') {
+    throw 'Online update stopped because local main contains changes other than one unpushed event-data commit.'
   }
 
   $unexpectedCommitted = @(@(& git diff-tree --no-commit-id --name-only -r HEAD) | Where-Object {
@@ -63,7 +64,7 @@ function Sync-MainAndResumeDailyCommit {
 
   $resumeRefSpec = '{0}:refs/heads/main' -f $localHead
   Invoke-LoggedGit -GitArguments @('push', '--quiet', 'origin', $resumeRefSpec)
-  Write-OnlineLog "Resumed and pushed the previously committed daily update $localHead."
+  Write-OnlineLog "Resumed and pushed the previously committed event-data update $localHead."
   return $localHead
 }
 
@@ -78,7 +79,7 @@ if ($LASTEXITCODE -ne 0 -or $remote -notmatch 'github\.com[:/]nekosama40/kotake-
 }
 
 Assert-NoUnrelatedStagedChanges
-$initialHead = Sync-MainAndResumeDailyCommit
+$initialHead = Sync-MainAndResumeEventCommit
 $publishMutex = [System.Threading.Mutex]::new($false, 'Local\KotakeEventsPublish')
 $publishMutexAcquired = $false
 
@@ -118,7 +119,7 @@ try {
   }
 
   Assert-NoUnrelatedStagedChanges
-  $baseHead = Sync-MainAndResumeDailyCommit
+  $baseHead = Sync-MainAndResumeEventCommit
   Invoke-LoggedGit -GitArguments (@('add', '-A', '--') + $publicPaths)
 
   $unexpectedStaged = @(@(& git diff --cached --name-only) | Where-Object {
@@ -142,7 +143,7 @@ try {
     throw "Unable to inspect staged online changes (exit $diffExitCode)."
   }
 
-  Invoke-LoggedGit -GitArguments (@('commit', '--only', '-m', "Daily events $TargetDate", '--') + $publicPaths)
+  Invoke-LoggedGit -GitArguments (@('commit', '--only', '-m', "$UpdateMode events $TargetDate", '--') + $publicPaths)
   $createdHead = (& git rev-parse HEAD).Trim()
   $createdParent = (& git rev-parse "$createdHead^").Trim()
   if ($LASTEXITCODE -ne 0 -or $createdParent -ne $baseHead) {

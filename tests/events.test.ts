@@ -13,6 +13,7 @@ import {
   timingLabel,
   tokyoDate,
 } from "../src/lib/events";
+import { normalizeCoveredDates, selectionAfterTokyoDateChange } from "../src/App";
 import type { EventItem } from "../src/types";
 
 const base: EventItem = {
@@ -41,6 +42,21 @@ const base: EventItem = {
 };
 
 describe("event helpers", () => {
+  it("keeps all covered dates available in chronological order", () => {
+    const dates = Array.from({ length: 31 }, (_, index) => {
+      const date = new Date("2026-08-23T00:00:00Z");
+      date.setUTCDate(date.getUTCDate() + index);
+      return date.toISOString().slice(0, 10);
+    });
+    expect(normalizeCoveredDates([...dates].reverse(), "2026-08-23")).toEqual(dates);
+    expect(normalizeCoveredDates(undefined, "2026-08-23")).toEqual(["2026-08-23"]);
+  });
+
+  it("follows a new Tokyo date only while the user is following today", () => {
+    expect(selectionAfterTokyoDateChange("2026-08-23", "2026-08-23", "2026-08-24", true)).toBe("2026-08-24");
+    expect(selectionAfterTokyoDateChange("2026-08-30", "2026-08-23", "2026-08-24", false)).toBe("2026-08-30");
+  });
+
   it("uses the Tokyo calendar date", () => {
     expect(tokyoDate(new Date("2026-08-06T16:00:00Z"))).toBe("2026-08-07");
     expect(isEventOnDate(base, "2026-08-07")).toBe(true);
