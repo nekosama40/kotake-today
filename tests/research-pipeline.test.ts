@@ -510,6 +510,8 @@ describe("research pipeline", () => {
     expect(researchScript).toContain("$ErrorActionPreference = 'Continue'");
     expect(researchScript).toContain("$codexExitCode = $LASTEXITCODE");
     expect(researchRunner).toContain('"--output-schema"');
+    expect(researchScript).toContain("$codexEntry = $codexCommand.Source");
+    expect(researchRunner).toContain("isJavaScriptEntry");
     expect(researchPrompt).toContain("{{MONTHLY_DRAFT_CANDIDATES}}");
     expect(researchPrompt).toContain("今回あらためて `sourceUrl` を開き");
     expect(researchPrompt).toContain("公式告知を確認できない月間候補");

@@ -1,14 +1,14 @@
 import fs from "node:fs";
 import { spawn } from "node:child_process";
+import path from "node:path";
 
-const [codexJs, promptPath, schemaPath, outputPath, tracePath, stderrPath, projectRoot] = process.argv.slice(2);
-if (!codexJs || !promptPath || !schemaPath || !outputPath || !tracePath || !stderrPath || !projectRoot) {
-  console.error("Usage: node scripts/run-codex-research.mjs <codex-js> <prompt> <schema> <output> <trace> <stderr> <project-root>");
+const [codexEntry, promptPath, schemaPath, outputPath, tracePath, stderrPath, projectRoot] = process.argv.slice(2);
+if (!codexEntry || !promptPath || !schemaPath || !outputPath || !tracePath || !stderrPath || !projectRoot) {
+  console.error("Usage: node scripts/run-codex-research.mjs <codex-entry> <prompt> <schema> <output> <trace> <stderr> <project-root>");
   process.exit(2);
 }
 
-const args = [
-  codexJs,
+const codexArgs = [
   "exec", "--ephemeral", "--color", "never", "--json",
   "--sandbox", "read-only",
   "--model", "gpt-5.6-luna",
@@ -20,10 +20,14 @@ const args = [
   "-",
 ];
 
+const isJavaScriptEntry = [".js", ".mjs", ".cjs"].includes(path.extname(codexEntry).toLowerCase());
+const command = isJavaScriptEntry ? process.execPath : codexEntry;
+const args = isJavaScriptEntry ? [codexEntry, ...codexArgs] : codexArgs;
+
 fs.rmSync(outputPath, { force: true });
 const trace = fs.createWriteStream(tracePath, { encoding: "utf8" });
 const stderr = fs.createWriteStream(stderrPath, { encoding: "utf8" });
-const child = spawn(process.execPath, args, { cwd: projectRoot, stdio: ["pipe", "pipe", "pipe"] });
+const child = spawn(command, args, { cwd: projectRoot, stdio: ["pipe", "pipe", "pipe"] });
 fs.createReadStream(promptPath).pipe(child.stdin);
 child.stdout.pipe(trace);
 child.stderr.pipe(stderr);

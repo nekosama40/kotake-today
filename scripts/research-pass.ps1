@@ -175,12 +175,11 @@ Write-Output $monthlyDraftLogLine
 $savedErrorPreference = $ErrorActionPreference
 $ErrorActionPreference = 'Continue'
 $codexCommand = Get-Command codex -ErrorAction Stop
-$codexBinDir = Split-Path -Parent $codexCommand.Source
-$codexJs = Join-Path $codexBinDir 'node_modules\@openai\codex\bin\codex.js'
-if (-not (Test-Path -LiteralPath $codexJs)) {
-  throw "Unable to locate the installed Codex CLI JavaScript entry point."
+$codexEntry = $codexCommand.Source
+if (-not $codexEntry -or -not (Test-Path -LiteralPath $codexEntry)) {
+  throw "Unable to locate the installed Codex CLI entry point."
 }
-& node (Join-Path $scriptDir 'run-codex-research.mjs') $codexJs $promptFile $passSchemaFile $OutputFile $traceFile $stderrFile $projectRoot 2>&1 | Add-Content -LiteralPath $PassLogFile -Encoding utf8
+& node (Join-Path $scriptDir 'run-codex-research.mjs') $codexEntry $promptFile $passSchemaFile $OutputFile $traceFile $stderrFile $projectRoot 2>&1 | Add-Content -LiteralPath $PassLogFile -Encoding utf8
 $codexExitCode = $LASTEXITCODE
 $ErrorActionPreference = $savedErrorPreference
 if ($codexExitCode -ne 0) {
