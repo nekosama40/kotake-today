@@ -503,14 +503,14 @@ describe("research pipeline", () => {
     expect(researchScript).toContain("prepare-monthly-draft-brief.mjs");
     expect(researchScript).toContain("prepare-prior-brief.mjs");
     expect(researchScript).toContain("run-codex-research.mjs");
-    expect(researchRunner).toContain("gpt-5.6-luna");
+    expect(researchRunner).toContain("gpt-6-luna");
     expect(researchRunner).toContain('model_reasoning_effort="max"');
     expect(researchRunner).toContain('"--json"');
     expect(researchScript).toContain("watchlistChecks");
     expect(researchScript).toContain("$ErrorActionPreference = 'Continue'");
     expect(researchScript).toContain("$codexExitCode = $LASTEXITCODE");
     expect(researchRunner).toContain('"--output-schema"');
-    expect(researchScript).toContain("$codexEntry = $codexCommand.Source");
+    expect(researchScript).toContain("resolve-codex-entry.ps1");
     expect(researchRunner).toContain("isJavaScriptEntry");
     expect(researchPrompt).toContain("{{MONTHLY_DRAFT_CANDIDATES}}");
     expect(researchPrompt).toContain("今回あらためて `sourceUrl` を開き");

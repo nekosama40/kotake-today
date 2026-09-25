@@ -88,7 +88,7 @@ describe("on-demand monthly updates", () => {
     expect(monthlyUpdate).toContain("KotakeEvents-Daily is enabled");
     expect(monthlyUpdate).toContain("-UpdateMode Monthly");
     expect(monthlyResearch).toContain("monthly-quality-gap");
-    expect(codexRunner).toContain('"gpt-5.6-luna"');
+    expect(codexRunner).toContain('"gpt-6-luna"');
     expect(codexRunner).toContain('model_reasoning_effort="max"');
     expect(codexRunner).toContain("isJavaScriptEntry");
     expect(codexRunner).toContain("spawn(command, args");
