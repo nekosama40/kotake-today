@@ -174,8 +174,7 @@ $monthlyDraftLogLine | Add-Content -LiteralPath $PassLogFile -Encoding utf8
 Write-Output $monthlyDraftLogLine
 $savedErrorPreference = $ErrorActionPreference
 $ErrorActionPreference = 'Continue'
-$codexCommand = Get-Command codex -ErrorAction Stop
-$codexEntry = $codexCommand.Source
+$codexEntry = & (Join-Path $scriptDir 'resolve-codex-entry.ps1')
 if (-not $codexEntry -or -not (Test-Path -LiteralPath $codexEntry)) {
   throw "Unable to locate the installed Codex CLI entry point."
 }

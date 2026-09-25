@@ -106,12 +106,11 @@ $OutputEncoding = $utf8Encoding
 $env:PYTHONUTF8 = '1'
 $env:PYTHONIOENCODING = 'utf-8'
 
-"[$((Get-Date).ToString('o'))] Starting $PassName with Luna max" | Set-Content -LiteralPath $PassLogFile -Encoding utf8
-$codexCommand = Get-Command codex -ErrorAction Stop
-$codexEntry = $codexCommand.Source
+$codexEntry = & (Join-Path $scriptDir 'resolve-codex-entry.ps1')
 if (-not $codexEntry -or -not (Test-Path -LiteralPath $codexEntry)) {
   throw 'Unable to locate the installed Codex CLI entry point.'
 }
+"[$((Get-Date).ToString('o'))] Starting $PassName with GPT-6 Luna max via $codexEntry" | Set-Content -LiteralPath $PassLogFile -Encoding utf8
 
 $savedErrorPreference = $ErrorActionPreference
 $ErrorActionPreference = 'Continue'
