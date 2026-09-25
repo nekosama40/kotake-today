@@ -61,7 +61,7 @@ try {
     throw 'KotakeEvents-Daily is enabled. Disable the legacy daily AI task before running an on-demand monthly update.'
   }
 
-  Write-MonthlyLog "On-demand monthly update started for $TargetDate through $EndDate with Luna max."
+  Write-MonthlyLog "On-demand monthly update started for $TargetDate through $EndDate with GPT-6 Luna max."
   if ($ReuseExistingDraft -and (Test-Path -LiteralPath $draftFile)) {
     Write-MonthlyLog "Reusing the existing monthly draft: $draftFile"
   }

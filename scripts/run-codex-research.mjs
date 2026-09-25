@@ -11,7 +11,7 @@ if (!codexEntry || !promptPath || !schemaPath || !outputPath || !tracePath || !s
 const codexArgs = [
   "exec", "--ephemeral", "--color", "never", "--json",
   "--sandbox", "read-only",
-  "--model", "gpt-5.6-luna",
+  "--model", "gpt-6-luna",
   "--config", 'model_reasoning_effort="max"',
   "--enable", "browser_use",
   "--output-schema", schemaPath,
